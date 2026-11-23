@@ -1,7 +1,7 @@
 /* Second Wind service worker.
    To ship an update: change any app file, then bump VERSION below and upload everything.
    Open copies of the app then show "A new version is ready" with a Reload button. */
-const VERSION = 'v4';
+const VERSION = 'v5';
 const SHELL_CACHE = 'crl-shell-' + VERSION;
 const FONT_CACHE = 'crl-fonts';
 const SHELL = [

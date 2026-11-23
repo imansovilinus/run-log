@@ -222,6 +222,21 @@ label.chip[data-lv="bad"] input:checked+span{background:var(--bad);border-color:
 .update{position:fixed;left:16px;right:16px;bottom:calc(var(--nav-h) + 12px + env(safe-area-inset-bottom));z-index:10;max-width:528px;margin:0 auto;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;background:var(--hero);color:var(--hero-ink);border:1px solid var(--hero-line)}
 .update[hidden]{display:none}
 input[type="file"]{display:none}
+/* session types + intervals */
+.seg.c4{grid-template-columns:repeat(4,1fr)}
+.seg.c4 label.chip span{font-size:14px}
+.ivbox{border:1px dashed var(--line);border-radius:14px;padding:14px;display:flex;flex-direction:column;gap:14px;background:var(--surface-2)}
+.ivbox[hidden]{display:none}
+.reps{display:flex;flex-direction:column;gap:8px}
+.rep{display:grid;grid-template-columns:58px 1fr 76px;gap:10px;align-items:center}
+.rep b{font:700 17px var(--display);text-transform:uppercase}
+.rep .rp{font-size:13px;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.repbars{display:flex;align-items:flex-end;gap:4px;height:46px;margin-top:12px}
+.repbars i{flex:1;background:var(--volt);border-radius:3px 3px 0 0}
+.repbars i.slow{background:var(--muted)}
+.ivline{font-size:14px;color:var(--muted);margin-top:8px}
+.ivline b{color:var(--ink)}
+.dot.hard{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink)}
 @media (max-width:360px){.hero .big{font-size:70px}.act-stats b{font-size:24px}.seg.c6{grid-template-columns:repeat(4,1fr)}}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -311,6 +326,36 @@ const STRENGTH_A=['Calf raise, straight knee (slow lowering)','Calf raise, bent 
 const STRENGTH_B=['Single-leg calf raise','Banded lateral walk','Hamstring bridge walkout or slider curl','Plank'];
 const AREAS=['None','Calf (left)','Calf (right)','Thigh (left)','Thigh (right)','Other'];
 
+/* ---------- session types ---------- */
+const TYPES=[['easy','Easy'],['long','Long'],['recovery','Recovery'],['strides','Strides'],['tempo','Tempo'],['intervals','Intervals'],['race','Race'],['other','Other']];
+const TYPE_LABEL=Object.fromEntries(TYPES);
+/* Hard sessions are meant to be RPE 7+, so high effort alone does not make them amber. */
+const HARD=['tempo','intervals','race'];
+const isHard=r=>HARD.indexOf(r.type)>=0;
+const isEasyType=r=>!r.type||['easy','long','recovery','other'].indexOf(r.type)>=0;
+const planType=p=>!p?'easy':/long/i.test(p.label)?'long':/recovery/i.test(p.label)?'recovery':'easy';
+
+/* ---------- calendar weeks (Mon–Sun), used after the comeback block ---------- */
+const addDays=(s,n)=>{const d=toD(s);d.setDate(d.getDate()+n);return ymd(d);};
+const mondayOf=s=>addDays(s,-((toD(s).getDay()+6)%7));
+function calWeek(mon){
+  const e=addDays(mon,6),runs=S.runs.filter(r=>r.d>=mon&&r.d<=e);
+  return {s:mon,e,runs,km:runs.reduce((a,r)=>a+r.km,0),n:runs.length,hard:runs.filter(isHard).length};
+}
+const recentWeeks=n=>{const m=mondayOf(TODAY),out=[];for(let i=n-1;i>=0;i--)out.push(calWeek(addDays(m,-7*i)));return out;};
+
+/* ---------- interval maths ---------- */
+const ivDesc=iv=>iv.n+' × '+iv.size+(iv.unit==='min'?' min':' m');
+function ivStats(iv){
+  const v=(iv.reps||[]).filter(x=>x&&x.d>0&&x.t>0);if(!v.length)return null;
+  const pace=v.map(x=>x.t/x.d);
+  const avg=v.reduce((a,x)=>a+x.t,0)/v.reduce((a,x)=>a+x.d,0);
+  let fade=null;
+  if(v.length>=3){const k=Math.max(1,Math.floor(v.length/3));const f=pace.slice(0,k).reduce((a,b)=>a+b,0)/k,l=pace.slice(-k).reduce((a,b)=>a+b,0)/k;fade=(l-f)/f*100;}
+  return {v,pace,avg,fade,fast:Math.min.apply(null,pace),slow:Math.max.apply(null,pace),avgD:v.reduce((a,x)=>a+x.d,0)/v.length};
+}
+const ivTotal=iv=>(iv.wu||0)+(iv.cd||0)+(iv.reps||[]).reduce((a,x)=>a+(x&&x.d>0?x.d:0),0);
+
 /* ---------- storage: IndexedDB on this phone, localStorage mirror ---------- */
 const LS_KEY='runlog_v1',DB_NAME='comeback-run-log';
 function normalize(s){
@@ -395,8 +440,10 @@ function signal(){
   if(cramps.length>=2)return {lvl:'bad',sticky:true,title:'Red: recurring cramp',text:'Cramp logged on '+cramps.length+' runs in the last 14 days. Stop running and get assessed before the next run.'};
   const rec=S.runs.filter(r=>{const k=dayDiff(r.d,TODAY);return k>=0&&k<7;}).sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:runTime(b)-runTime(a));
   if(!rec.length)return {lvl:'',title:'No runs in the last 7 days',text:'Log a run to see your recovery signal.'};
-  if(rec.find(r=>r.pain>=3||r.cramp)||rec[0].rpe>=6)return {lvl:'warn',title:'Amber: ease off',text:'Shorten the next run or swap it for a walk. Skip the Friday and Sunday runs, and do not add strength load.'};
-  return {lvl:'ok',title:'Green: run as planned',text:'Pain stayed at 2/10 or below, no cramp, and effort stayed easy.'};
+  if(rec.find(r=>r.pain>=3||r.cramp)||(rec[0].rpe>=6&&!isHard(rec[0])))return {lvl:'warn',title:'Amber: ease off',text:TODAY<=LAST?'Shorten the next run or swap it for a walk. Skip the Friday and Sunday runs, and do not add strength load.':'Shorten the next run or swap it for a walk. No quality session and no strength progression until it settles.'};
+  const hard=rec.filter(isHard).sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
+  if(hard.some((r,i)=>i>0&&dayDiff(hard[i-1].d,r.d)<=1))return {lvl:'warn',title:'Amber: hard sessions too close',text:'Two tempo, interval or race efforts within 48 hours. Keep the next two days easy or rest.'};
+  return {lvl:'ok',title:'Green: run as planned',text:'Pain stayed at 2/10 or below, no cramp, and easy runs stayed easy.'};
 }
 function gates(){
   let core=0,coreDone=0;WEEKS.forEach(w=>{const i=weekInfo(w);core+=i.core;coreDone+=i.coreDone;});
@@ -412,16 +459,23 @@ function gates(){
     {ok:null,t:'Easy pace feels easier at the same RPE',d:(p1&&p4)?'Easy-run average (RPE 4 or less): Week 1 '+fmtPace(p1)+'/km, Week 4 '+fmtPace(p4)+'/km. Your call: is it easier?':'Needs timed runs at RPE 4 or less in Weeks 1 and 4. This one is your own judgement.'}
   ];
 }
-function easyAvg(from,to){const xs=S.runs.filter(r=>r.d>=from&&r.d<=to&&r.rpe<=4&&r.min>0&&r.km>0).map(r=>r.min/r.km);return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null;}
+function easyAvg(from,to){const xs=S.runs.filter(r=>r.d>=from&&r.d<=to&&isEasyType(r)&&r.rpe<=4&&r.min>0&&r.km>0).map(r=>r.min/r.km);return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null;}
+function ivLine(iv){
+  const st=ivStats(iv);
+  const reps=(iv.reps||[]).map(x=>iv.unit==='min'?(x.d>0?Math.round(x.d*1000)+'m':'?'):(x.t>0?fmtDur(x.t):'?')).join(', ');
+  return '['+ivDesc(iv)+': '+reps+(st?'; rep pace '+fmtPace(st.avg)+'/km'+(st.fade!=null?', fade '+(st.fade>=0?'+':'')+st.fade.toFixed(1)+'%':''):'')
+    +(iv.rec&&iv.rec.min?'; rec '+fmtDur(iv.rec.min)+' '+iv.rec.kind:'')+'; WU '+r1(iv.wu||0)+' km, CD '+r1(iv.cd||0)+' km]';
+}
 function summary(){
   const L=['Second Wind running log, as of '+TODAY,''];
   WEEKS.forEach(w=>{const i=weekInfo(w);L.push('Week '+(w+1)+' ('+fmtShort(i.s)+'–'+fmtShort(i.e)+'): '+r1(i.actual)+' km logged of '+i.planned+' planned; core runs '+i.coreDone+'/'+i.core);});
+  if(TODAY>LAST){L.push('','Recent weeks (Mon–Sun):');recentWeeks(4).forEach(w=>L.push('Week of '+fmtShort(w.s)+': '+r1(w.km)+' km, '+w.n+' runs, '+w.hard+' quality'));}
   const sig=signal();L.push('','Recovery signal: '+sig.title);
   if(S.clearedAt)L.push('Marked as assessed/cleared on '+ymd(new Date(S.clearedAt)));
   L.push('','Runs:');
   const rs=S.runs.slice().sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:runTime(a)-runTime(b));
   if(!rs.length)L.push('none logged yet');
-  rs.forEach(r=>L.push(r.d+' | '+r1(r.km)+' km | '+(r.min?fmtDur(r.min)+' ('+fmtPace(r.min/r.km)+'/km)':'no time')+' | RPE '+r.rpe+' | pain '+r.pain+(r.area&&r.area!=='None'?' ('+r.area+')':'')+(r.sharp?' | SHARP/LIMP':'')+(r.cramp?' | CRAMP':'')+' | '+(r.heat||'')+' | '+(r.shoe||'')+(r.note?' | '+r.note:'')));
+  rs.forEach(r=>L.push(r.d+' | '+(TYPE_LABEL[r.type]||'Run')+(r.iv?' '+ivLine(r.iv):'')+' | '+r1(r.km)+' km | '+(r.min?fmtDur(r.min)+' ('+fmtPace(r.min/r.km)+'/km)':'no time')+' | RPE '+r.rpe+' | pain '+r.pain+(r.area&&r.area!=='None'?' ('+r.area+')':'')+(r.sharp?' | SHARP/LIMP':'')+(r.cramp?' | CRAMP':'')+' | '+(r.heat||'')+' | '+(r.shoe||'')+(r.note?' | '+r.note:'')));
   const sd=Object.keys(S.strength).filter(k=>S.strength[k]).sort();
   L.push('','Strength done: '+(sd.length?sd.join(', '):'none yet'));
   L.push('','January gate:');
@@ -477,14 +531,47 @@ function weekStrip(){
    +'<div class="strip">'+days+'</div><div class="progress" role="img" aria-label="'+r1(i.actual)+' of '+i.planned+' km this week"><i style="width:'+f+'%"></i></div></section>'
    +'<div class="chips"><span class="chipstat"><b>'+r1(i.actual)+'</b>/ '+i.planned+' km</span><span class="chipstat"><b>'+i.coreDone+'</b>/ '+i.core+' core runs</span><span class="chipstat"><b>'+i.strDone+'</b>/ '+i.strPlanned+' strength</span></div>';
 }
+function calStrip(){
+  const mon=mondayOf(TODAY),w=calWeek(mon);
+  let days='';
+  for(let i=0;i<7;i++){
+    const d=addDays(mon,i),rs=runsOn(d),km=rs.reduce((a,r)=>a+r.km,0);
+    const cls='dot'+(rs.length?' run done'+(rs.some(isHard)?' hard':''):' rest');
+    days+='<div class="day'+(d===TODAY?' now':'')+'" title="'+esc(fmt(d))+'"><span>'+dow(d).slice(0,1)+'</span><span class="'+cls+'">'+(rs.length?(km>=10?Math.round(km):r1(km).replace(/\.0$/,'')):(d>TODAY?'':'–'))+'</span></div>';
+  }
+  return '<section class="week" aria-label="This week"><div class="week-head"><b>Week of '+fmtShort(mon)+'</b><span class="small muted">'+r1(w.km)+' km · '+w.n+' run'+(w.n===1?'':'s')+'</span></div><div class="strip">'+days+'</div></section>'
+   +'<div class="chips"><span class="chipstat"><b>'+r1(w.km)+'</b>km</span><span class="chipstat"><b>'+w.n+'</b>runs</span><span class="chipstat"><b>'+w.hard+'</b>quality</span></div>';
+}
+function trendChart(n){
+  const ws=recentWeeks(n),max=Math.max(1,Math.max.apply(null,ws.map(w=>w.km)));
+  return '<div class="h-sec"><span>Weekly distance</span><span class="small muted" style="text-transform:none;letter-spacing:0">last '+n+' weeks</span></div><div class="card" style="margin-top:0"><div class="chart" style="grid-template-columns:repeat('+n+',1fr);gap:6px">'
+   +ws.map((w,i)=>'<div class="col" role="img" aria-label="Week of '+fmtShort(w.s)+': '+r1(w.km)+' km, '+w.n+' runs"><span class="cv" style="font-size:12px">'+(w.km?Math.round(w.km):'')+'</span><div class="bars" style="height:100%;border:0;background:var(--surface-2)"><i style="height:'+(w.km/max*100)+'%"></i></div><small style="font-size:10px">'+(i%2===(n-1)%2?toD(w.s).getDate()+'/'+(toD(w.s).getMonth()+1):'')+'</small></div>').join('')
+   +'</div><p class="small muted" style="margin:10px 0 0">Bars show km per week (Mon–Sun). Labels are the Monday dates.</p></div>';
+}
 function actCard(r){
   const p=planRunOn(r.d);
   const pc=isRedRun(r)?'bad':(r.pain>=3||r.cramp)?'warn':'ok';
-  const title=p?p.label:'Run';
+  const tl=TYPE_LABEL[r.type];
+  const iv=r.type==='intervals'&&r.iv?r.iv:null;
+  const st=iv?ivStats(iv):null;
+  const title=iv?'Intervals · '+ivDesc(iv):(p&&(!r.type||r.type===planType(p))?p.label:(tl?tl+' run':'Run'));
+  let mid;
+  if(st)mid=iv.unit==='min'?'<span>Avg rep</span><b>'+Math.round(st.avgD*1000)+'<small>m</small></b>':'<span>Avg rep</span><b>'+fmtDur(st.avg*iv.size/1000)+'<small>/'+iv.size+'m</small></b>';
+  else mid='<span>Pace</span><b>'+(r.min?fmtPace(r.min/r.km)+'<small>/km</small>':'–')+'</b>';
+  let ivHtml='';
+  if(iv){
+    if(st){
+      ivHtml+='<div class="repbars" role="img" aria-label="Rep paces, taller is faster">'+st.pace.map(pc2=>'<i'+(pc2===st.slow&&st.pace.length>1?' class="slow"':'')+' style="height:'+(st.slow>st.fast?30+70*(st.slow-pc2)/(st.slow-st.fast):100)+'%"></i>').join('')+'</div>';
+      ivHtml+='<div class="ivline">Rep pace <b>'+fmtPace(st.avg)+'/km</b> · fastest '+fmtPace(st.fast)+' · slowest '+fmtPace(st.slow)+'</div>';
+    }
+    ivHtml+='<div class="ivline">'+(iv.rec&&iv.rec.min?'Recovery '+fmtDur(iv.rec.min)+' '+esc(iv.rec.kind||'')+' · ':'')+'WU '+r1(iv.wu||0)+' km · CD '+r1(iv.cd||0)+' km</div>';
+  }
+  const fadeP=st&&st.fade!=null?'<span class="pill '+(st.fade>5?'warn':'')+'">Fade '+(st.fade>=0?'+':'')+st.fade.toFixed(1)+'%</span>':'';
   return '<article class="act"><div class="act-head"><span class="ico" aria-hidden="true">'+IC.run+'</span><div><div class="act-title">'+esc(title)+'</div><div class="act-meta">'+fmt(r.d)+(r.heat?' · '+esc(r.heat):'')+(r.shoe?' · '+esc(r.shoe):'')+'</div></div>'
    +'<button class="more'+(pendingDel===r.id?' danger':'')+'" type="button" data-act="del" data-id="'+esc(r.id)+'" aria-label="Delete this run">'+(pendingDel===r.id?'Delete?':'⋯')+'</button></div>'
-   +'<div class="act-stats"><div><span>Distance</span><b>'+r1(r.km)+'<small>km</small></b></div><div><span>Pace</span><b>'+(r.min?fmtPace(r.min/r.km)+'<small>/km</small>':'–')+'</b></div><div><span>Time</span><b>'+(r.min?fmtDur(r.min):'–')+'</b></div></div>'
-   +'<div class="act-foot"><span class="pill">RPE '+r.rpe+'</span><span class="pill '+pc+'">Pain '+r.pain+(r.area&&r.area!=='None'?' · '+esc(r.area):'')+'</span>'+(r.cramp?'<span class="pill warn">Cramp</span>':'')+(r.sharp?'<span class="pill bad">Sharp / limp</span>':'')+(p&&r.km>p.km*1.15?'<span class="pill warn">Over plan</span>':'')+'</div>'
+   +'<div class="act-stats"><div><span>Distance</span><b>'+r1(r.km)+'<small>km</small></b></div><div>'+mid+'</div><div><span>Time</span><b>'+(r.min?fmtDur(r.min):'–')+'</b></div></div>'
+   +ivHtml
+   +'<div class="act-foot">'+(isHard(r)||r.type==='strides'?'<span class="pill">'+esc(tl)+'</span>':'')+'<span class="pill">RPE '+r.rpe+'</span><span class="pill '+pc+'">Pain '+r.pain+(r.area&&r.area!=='None'?' · '+esc(r.area):'')+'</span>'+(r.cramp?'<span class="pill warn">Cramp</span>':'')+(r.sharp?'<span class="pill bad">Sharp / limp</span>':'')+fadeP+(p&&!isHard(r)&&r.km>p.km*1.15?'<span class="pill warn">Over plan</span>':'')+'</div>'
    +(r.note?'<p class="act-note">'+esc(r.note)+'</p>':'')+'</article>';
 }
 function greeting(){
@@ -501,7 +588,12 @@ function viewHome(){
     out+=sigCard(sig);
     out+='<div class="h-sec"><span>First run</span></div>'+hero(PLAN.find(p=>p.d===FIRST_RUN)).replace('class="hero"','class="hero" style="margin-top:0"');
   }else if(TODAY>LAST){
-    out+='<section class="hero"><div class="eyebrow"><span>Four weeks done</span></div><h2>Programme complete</h2><p class="note" style="color:var(--hero-ink)">Check the January gate on Progress, then copy your summary to Claude to plan January.</p><div class="row"><a class="btn block" href="#progress">Open Progress</a></div></section>';
+    const w=calWeek(mondayOf(TODAY)),last4=recentWeeks(4).reduce((a,x)=>a+x.km,0)/4;
+    out+='<section class="hero"><div class="eyebrow"><span>Training log · '+fmt(TODAY)+'</span><span class="tag">'+w.n+' run'+(w.n===1?'':'s')+' this week</span></div><h2>This week</h2>'
+     +'<div class="big">'+r1(w.km)+'<small>km</small></div>'
+     +'<div class="stats"><div><span>Runs</span><b>'+w.n+'</b></div><div><span>Quality</span><b>'+w.hard+'</b></div><div><span>4-wk avg</span><b>'+r1(last4)+' km</b></div></div>'
+     +(TODAY<=addDays(LAST,21)?'<p class="note">Comeback block done. Check the January gate on Progress and send Claude your summary before adding quality sessions.</p>':'')
+     +'<div class="row"><a class="btn block" href="#log">'+IC.plus.replace('<svg','<svg width="20" height="20" style="stroke:currentColor;fill:none;stroke-width:2.6;stroke-linecap:round"')+' Log a run</a></div></section>';
     out+=sigCard(sig);
   }else{
     const p=PLAN.find(x=>x.d===TODAY);if(p)out+=hero(p);
@@ -510,7 +602,7 @@ function viewHome(){
   if(S.runs.length&&Date.now()-S.lastBackup>7*864e5){
     out+='<div class="banner warn"><b>Back up your log.</b> '+(S.lastBackup?'Last backup '+fmtShort(ymd(new Date(S.lastBackup)))+'.':'No backup yet.')+' Your runs live only on this phone. <a href="#progress">Export on Progress</a>.</div>';
   }
-  if(TODAY>=PLAN[0].d&&TODAY<=LAST){out+='<div class="h-sec"><span>This week</span></div>'+weekStrip();}
+  if(TODAY>=PLAN[0].d){out+='<div class="h-sec"><span>This week</span></div>'+(TODAY<=LAST?weekStrip():calStrip());}
   const rs=sortedRuns();
   out+='<div class="h-sec"><span>Recent activity</span>'+(rs.length>3?'<a href="#runs">See all '+rs.length+'</a>':'')+'</div>';
   if(!rs.length)out+='<div class="act empty"><b>No runs yet</b>Your first planned run is '+fmt(FIRST_RUN)+'. Log it with the + button.</div>';
@@ -536,6 +628,17 @@ function viewLog(){
   return '<div class="h-sec" style="margin-top:8px"><span>Log a run</span></div>'
    +(pl?'<div class="card" style="margin-top:0;display:flex;gap:12px;align-items:center"><span class="ico" aria-hidden="true">'+IC.run+'</span><div><b>'+esc(pl.label)+' · '+pl.km+' km</b><div class="small muted">Planned '+fmt(d)+' · ceiling '+esc(pl.pace)+'/km · RPE '+esc(pl.rpe)+'</div></div></div>':'')
    +'<form id="runform" class="form" autocomplete="off" style="margin-top:16px" onsubmit="return false">'
+   +'<div class="field"><span class="flabel">Session type</span>'+seg('type',TYPES,planType(pl),'c4')+'</div>'
+   +'<div id="ivbox" class="ivbox" hidden><span class="flabel" style="margin:0">Interval set</span>'
+   +'<div class="two"><div class="field"><label for="iv-n">Reps</label><input id="iv-n" type="number" inputmode="numeric" min="1" max="30" value="6"></div>'
+   +'<div class="field"><label for="iv-size">Each rep</label><input id="iv-size" type="number" inputmode="decimal" min="0" step="any" value="400"></div></div>'
+   +seg('ivunit',[['m','Metres'],['min','Minutes']],'m','c2')
+   +'<div class="hint" style="margin-top:-6px">For example 6 × 400 m, or 5 × 3 min.</div>'
+   +'<div id="iv-reps" class="reps"></div>'
+   +'<div class="field"><span class="flabel">Recovery between reps</span>'+seg('ivrec',['Jog','Walk','Stand'],'Jog','c3')+'<input id="iv-rec" type="text" inputmode="numeric" placeholder="Duration, e.g. 1:30" style="margin-top:8px"></div>'
+   +'<div class="two"><div class="field"><label for="iv-wu">Warm-up (km)</label><input id="iv-wu" type="number" inputmode="decimal" step="0.1" min="0" placeholder="1.5"></div>'
+   +'<div class="field"><label for="iv-cd">Cool-down (km)</label><input id="iv-cd" type="number" inputmode="decimal" step="0.1" min="0" placeholder="1.5"></div></div>'
+   +'<div id="iv-sum" class="ivline" role="status"></div></div>'
    +'<div class="two"><div class="field"><label for="f-km">Distance (km)</label><input id="f-km" class="bignum" type="number" inputmode="decimal" step="0.01" min="0" placeholder="'+(pl?pl.km.toFixed(1):'3.0')+'"></div>'
    +'<div class="field"><label for="f-time">Time</label><input id="f-time" class="bignum" type="text" inputmode="numeric" placeholder="21:30"></div></div>'
    +'<div class="hint" style="margin-top:-10px">Pace <b id="f-pace">–</b> /km · time as mm:ss or h:mm:ss</div>'
@@ -553,7 +656,7 @@ function viewLog(){
 }
 function viewPlan(){
   const cw=TODAY<PLAN[0].d?-1:curWeek();
-  return '<div class="h-sec" style="margin-top:8px"><span>4-week comeback</span><span class="small muted" style="text-transform:none;letter-spacing:0">58 km total</span></div>'+WEEKS.map(w=>{
+  return '<div class="h-sec" style="margin-top:8px"><span>4-week comeback'+(TODAY>LAST?' · done':'')+'</span><span class="small muted" style="text-transform:none;letter-spacing:0">58 km total</span></div>'+WEEKS.map(w=>{
     const i=weekInfo(w);
     return '<div class="card'+(w===cw&&TODAY<=LAST?' current':'')+'"'+(w===0?' style="margin-top:0"':'')+'><div class="wk-title"><b>Week '+(w+1)+' · '+esc(i.title)+'</b><span class="small muted">'+fmtShort(i.s)+'–'+fmtShort(i.e)+' · '+r1(i.actual)+' / '+i.planned+' km</span></div><ul class="rows" style="margin-top:8px">'
     +i.items.map(p=>{
@@ -576,13 +679,16 @@ function viewProgress(){
    +'<div class="tile"><span>Runs</span><b>'+S.runs.length+'</b></div>'
    +'<div class="tile"><span>Avg easy pace</span><b>'+(easy?fmtPace(easy)+'<small>/km</small>':'–')+'</b></div>'
    +'<div class="tile"><span>Longest run</span><b>'+(longest?r1(longest)+'<small>km</small>':'–')+'</b></div>'
-   +'<div class="tile"><span>Strength sessions</span><b>'+sTot+'<small>/ 6</small></b></div>'
+   +'<div class="tile"><span>Strength sessions</span><b>'+sTot+(TODAY<=LAST?'<small>/ 6</small>':'')+'</b></div>'
    +'<div class="tile"><span>Signal</span><b style="font-size:22px;line-height:1.6">'+esc(signal().title.split(':')[0])+'</b></div></div>';
+  if(TODAY>LAST)out+=trendChart(12);
+  else{
   const maxP=Math.max.apply(null,WEEKS.map(w=>Math.max(weekInfo(w).planned,weekInfo(w).actual)));
   out+='<div class="h-sec"><span>Weekly distance</span><span class="small muted" style="text-transform:none;letter-spacing:0">dashed = plan</span></div><div class="card" style="margin-top:0"><div class="chart">'+WEEKS.map(w=>{
     const i=weekInfo(w);const over=i.actual>i.planned*1.1;const h=i.planned/maxP*100;const f=i.planned?Math.min(i.actual/i.planned,1)*100:0;
     return '<div class="col" role="img" aria-label="Week '+(w+1)+': '+r1(i.actual)+' of '+i.planned+' km"><span class="cv">'+r1(i.actual)+'</span><div class="bars" style="height:'+h+'%"><i class="'+(over?'over':'')+'" style="height:'+f+'%"></i></div><small>W'+(w+1)+' · '+i.planned+'</small></div>';
   }).join('')+'</div><p class="small muted" style="margin:10px 0 0">Core runs: '+WEEKS.map(w=>{const i=weekInfo(w);return 'W'+(w+1)+' '+i.coreDone+'/'+i.core;}).join(' · ')+'</p></div>';
+  }
   const g=gates();
   out+='<div class="h-sec"><span>January gate</span></div><div class="card" style="margin-top:0"><p class="small muted" style="margin-top:0">Move on to a light quality session only when all of these are met. If not, repeat Week 3 or 4. That is not failing.</p>'
    +g.map(x=>'<div class="gate"><span class="mark '+(x.ok===true?'ok':'')+'">'+(x.ok===true?'✓':x.ok===false?'':'?')+'</span><div><b>'+esc(x.t)+'</b><br><span class="small muted">'+esc(x.d)+'</span></div></div>').join('')+'</div>';
@@ -604,7 +710,7 @@ function viewProgress(){
 function shell(t,body){
   let phase;
   if(TODAY<FIRST_RUN)phase='Recovery break · first run '+fmtShort(FIRST_RUN);
-  else if(TODAY>LAST)phase='Four-week programme finished';
+  else if(TODAY>LAST)phase='Training log · week of '+fmtShort(mondayOf(TODAY));
   else{const w=curWeek();phase='Week '+(w+1)+' of 4 · '+WEEK_TITLES[w];}
   const nav=[['home','Home',IC.home],['plan','Plan',IC.plan],['log','Log',IC.plus],['runs','Runs',IC.feed],['progress','Progress',IC.stats]];
   return '<div class="wrap"><header class="top"><div><p class="brand"><i aria-hidden="true"></i>Second Wind</p><p class="phase">'+esc(phase)+'</p></div><span id="save" class="save" role="status"></span></header>'
@@ -657,17 +763,68 @@ function importBackup(file){
   rd.readAsText(file);
 }
 
+/* ---------- interval builder (Log screen) ---------- */
+const pickR=n=>{const el=document.querySelector('input[name="'+n+'"]:checked');return el?el.value:'';};
+function readRepInputs(){return [...document.querySelectorAll('#iv-reps input')].map(i=>i.value);}
+function renderReps(){
+  const box=document.getElementById('iv-reps');if(!box)return;
+  const keep=readRepInputs();
+  const n=Math.max(0,Math.min(30,parseInt(document.getElementById('iv-n').value,10)||0));
+  const size=parseFloat(document.getElementById('iv-size').value)||0,unit=pickR('ivunit')||'m';
+  let h='';
+  for(let i=0;i<n;i++){
+    h+='<div class="rep"><b>Rep '+(i+1)+'</b>'
+      +(unit==='min'?'<input type="number" inputmode="numeric" min="0" data-i="'+i+'" aria-label="Rep '+(i+1)+' distance in metres" placeholder="metres, e.g. 800" value="'+esc(keep[i]||'')+'">'
+                    :'<input type="text" inputmode="numeric" data-i="'+i+'" aria-label="Rep '+(i+1)+' time" placeholder="time, e.g. 1:52" value="'+esc(keep[i]||'')+'">')
+      +'<span class="rp" id="rp-'+i+'">–</span></div>';
+  }
+  box.innerHTML=h;updateIv();
+}
+function readIv(){
+  const n=parseInt(document.getElementById('iv-n').value,10),size=parseFloat(document.getElementById('iv-size').value),unit=pickR('ivunit')||'m';
+  if(!(n>=1&&n<=30&&size>0))return null;
+  const vals=readRepInputs();
+  const reps=[];for(let i=0;i<n;i++){
+    const v=vals[i]||'';
+    if(unit==='min'){const m=parseFloat(v);reps.push({d:m>0?m/1000:null,t:size});}
+    else{const t=parseTime(v);reps.push({d:size/1000,t:t>0?t:null});}
+  }
+  const num=id=>{const x=parseFloat(document.getElementById(id).value);return x>0?x:0;};
+  const rm=parseTime(document.getElementById('iv-rec').value);
+  return {n,size,unit,reps,wu:num('iv-wu'),cd:num('iv-cd'),rec:{kind:(pickR('ivrec')||'Jog').toLowerCase(),min:rm>0?rm:null}};
+}
+function updateIv(){
+  const iv=readIv(),sum=document.getElementById('iv-sum'),km=document.getElementById('f-km');
+  if(!iv||!sum)return;
+  iv.reps.forEach((x,i)=>{const el=document.getElementById('rp-'+i);if(el)el.textContent=(x.d>0&&x.t>0)?fmtPace(x.t/x.d)+'/km':'–';});
+  const st=ivStats(iv),tot=ivTotal(iv);
+  sum.innerHTML='Reps + warm-up + cool-down = <b>'+r1(tot)+' km</b>'+(st?' · rep pace <b>'+fmtPace(st.avg)+'/km</b>':'')+'<br>Used as the distance if you leave Distance empty. Add your recovery jog distance there if you know it.';
+  if(km)km.placeholder=tot>0?r1(tot):'';
+}
+function toggleIv(){
+  const box=document.getElementById('ivbox');if(!box)return;
+  const on=pickR('type')==='intervals';box.hidden=!on;
+  if(on&&!document.querySelector('#iv-reps .rep'))renderReps();
+  if(!on){const km=document.getElementById('f-km'),pl=planRunOn(document.getElementById('f-date').value);if(km)km.placeholder=pl?pl.km.toFixed(1):'3.0';}
+}
+
 /* ---------- actions ---------- */
 function saveRun(){
   const g=id=>document.getElementById(id);const err=g('f-err');
   const pick=n=>{const el=document.querySelector('input[name="'+n+'"]:checked');return el?el.value:'';};
-  const d=g('f-date').value,km=parseFloat(g('f-km').value),raw=g('f-time').value,min=parseTime(raw);
+  const d=g('f-date').value,raw=g('f-time').value,min=parseTime(raw);let km=parseFloat(g('f-km').value);
   if(!d){err.textContent='Pick a date.';return;}
   if(d>ymd(new Date())){err.textContent='That date is in the future.';return;}
+  const type=pick('type')||'easy';let iv=null;
+  if(type==='intervals'){
+    iv=readIv();
+    if(!iv){err.textContent='Set the reps and their size, for example 6 × 400 m.';g('iv-n').focus();return;}
+    if(!(km>0))km=Math.round(ivTotal(iv)*100)/100;
+  }
   if(!(km>0&&km<60)){err.textContent='Enter the distance in km, for example 3.2.';g('f-km').focus();return;}
   if(raw.trim()&&!(min>0)){err.textContent='Enter the time as mm:ss, for example 21:30.';g('f-time').focus();return;}
   const now=Date.now();
-  S.runs.push({id:now.toString(36)+Math.random().toString(36).slice(2,6),at:now,d:d,km:Math.round(km*100)/100,min:min,rpe:+pick('rpe')||3,pain:+pick('pain')||0,area:g('f-area').value,sharp:g('f-sharp').checked,cramp:g('f-cramp').checked,shoe:pick('shoe'),heat:pick('heat'),note:g('f-note').value.trim().slice(0,300)});
+  S.runs.push({id:now.toString(36)+Math.random().toString(36).slice(2,6),at:now,d:d,type:type,iv:iv||undefined,km:Math.round(km*100)/100,min:min,rpe:+pick('rpe')||3,pain:+pick('pain')||0,area:g('f-area').value,sharp:g('f-sharp').checked,cramp:g('f-cramp').checked,shoe:pick('shoe'),heat:pick('heat'),note:g('f-note').value.trim().slice(0,300)});
   TODAY=ymd(new Date());
   const sig=signal();
   banner={lvl:sig.lvl==='bad'?'bad':sig.lvl==='warn'?'warn':'ok',msg:'Run saved. '+sig.title+'. '+sig.text};
@@ -700,8 +857,13 @@ document.addEventListener('click',function(e){
 });
 document.addEventListener('change',function(e){
   if(e.target.id==='importfile'&&e.target.files&&e.target.files[0])importBackup(e.target.files[0]);
+  else if(e.target.name==='type')toggleIv();
+  else if(e.target.name==='ivunit')renderReps();
+  else if(e.target.name==='ivrec')updateIv();
 });
 document.addEventListener('input',function(e){
+  if(e.target.id==='iv-n'||e.target.id==='iv-size')renderReps();
+  else if(e.target.closest&&e.target.closest('#ivbox'))updateIv();
   if(e.target.id==='f-km'||e.target.id==='f-time'){
     const km=parseFloat(document.getElementById('f-km').value),min=parseTime(document.getElementById('f-time').value);
     const el=document.getElementById('f-pace');if(el)el.textContent=(km>0&&min>0)?fmtPace(min/km):'–';
