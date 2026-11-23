@@ -222,6 +222,12 @@ label.chip[data-lv="bad"] input:checked+span{background:var(--bad);border-color:
 .update{position:fixed;left:16px;right:16px;bottom:calc(var(--nav-h) + 12px + env(safe-area-inset-bottom));z-index:10;max-width:528px;margin:0 auto;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;background:var(--hero);color:var(--hero-ink);border:1px solid var(--hero-line)}
 .update[hidden]{display:none}
 input[type="file"]{display:none}
+/* check-in */
+.card.checkin{border:2px solid var(--volt);margin-top:0;margin-bottom:12px}
+.checked{display:flex;flex-wrap:wrap;align-items:center;gap:4px 12px;margin-top:12px;padding:8px 8px 8px 14px;border:1px solid var(--line);border-radius:12px;background:var(--surface);font-size:14px}
+.checked>span{font:700 13px var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}
+.checked b{font-weight:600}
+.checked .more{margin-left:auto}
 /* session types + intervals */
 .seg.c4{grid-template-columns:repeat(4,1fr)}
 .seg.c4 label.chip span{font-size:14px}
@@ -360,7 +366,7 @@ const ivTotal=iv=>(iv.wu||0)+(iv.cd||0)+(iv.reps||[]).reduce((a,x)=>a+(x&&x.d>0?
 const LS_KEY='runlog_v1',DB_NAME='comeback-run-log';
 function normalize(s){
   if(!s||typeof s!=='object')s={};
-  return {runs:Array.isArray(s.runs)?s.runs.filter(r=>r&&r.id&&r.d&&r.km>0):[],strength:(s.strength&&typeof s.strength==='object')?s.strength:{},updated:+s.updated||0,clearedAt:+s.clearedAt||0,lastBackup:+s.lastBackup||0,name:typeof s.name==='string'?s.name.trim().slice(0,30):''};
+  return {runs:Array.isArray(s.runs)?s.runs.filter(r=>r&&r.id&&r.d&&r.km>0):[],strength:(s.strength&&typeof s.strength==='object')?s.strength:{},updated:+s.updated||0,clearedAt:+s.clearedAt||0,lastBackup:+s.lastBackup||0,name:typeof s.name==='string'?s.name.trim().slice(0,30):'',checkins:(s.checkins&&typeof s.checkins==='object')?s.checkins:{}};
 }
 function idb(){
   return new Promise((res,rej)=>{
@@ -387,7 +393,7 @@ async function loadState(){
 }
 
 let S=normalize(null);
-let saveTimer=null,saveState='',banner=null,logDate=null,pendingDel=null,pendingClear=false,lastTab='',installEvt=null;
+let saveTimer=null,saveState='',banner=null,logDate=null,pendingDel=null,pendingClear=false,lastTab='',installEvt=null,editId=null,pendingMenu=null,checkEdit=false;
 
 function save(delay){S.updated=Date.now();clearTimeout(saveTimer);saveState='pending';setStatus();saveTimer=setTimeout(doSave,delay||0);}
 async function doSave(){
@@ -431,6 +437,33 @@ function itemStatus(p){
   if(p.d<TODAY)return p.opt?{c:'',t:'Skipped'}:{c:'warn',t:'Not run'};
   return {c:'',t:p.opt?'Optional':'Planned'};
 }
+/* Amber rules from the plan that a run log cannot see: tight the next morning, two poor nights in a row. */
+function checkinSignal(){
+  const t=S.checkins[TODAY],y=S.checkins[addDays(TODAY,-1)];
+  if(t&&t.tight>=3)return {lvl:'warn',title:'Amber: tight this morning',text:'Calf/thigh tightness '+t.tight+'/10 at check-in. Shorten today\'s run or swap it for a walk. If it is sharp or you are limping, that is red: stop and get it assessed.'};
+  if(t&&y&&t.sleep==='poor'&&y.sleep==='poor')return {lvl:'warn',title:'Amber: two poor nights',text:'Two nights of poor sleep in a row. Keep today short and easy, or rest. Recovery is training.'};
+  return null;
+}
+/* Ramp guard: in the comeback block compare with the plan; afterwards with the previous 3 weeks. */
+function rampCheck(){
+  const msgs=[];let cap=null,mon,weekKm;
+  if(TODAY>=PLAN[0].d&&TODAY<=LAST){
+    const i=weekInfo(curWeek());mon=i.s;weekKm=i.actual;cap=i.planned*1.1;
+    if(weekKm>cap+0.05)msgs.push('This week is '+r1(weekKm)+' km against a plan of '+i.planned+' km. The comeback rule is shorten, never add.');
+  }else{
+    mon=mondayOf(TODAY);weekKm=calWeek(mon).runs.filter(r=>r.d<=TODAY).reduce((a,r)=>a+r.km,0);
+    /* Baseline = average of the weeks you actually ran in the previous 4, so a rest week does not make a normal week look like a jump. */
+    const ran=[1,2,3,4].map(k=>calWeek(addDays(mon,-7*k))).filter(x=>x.n>0);
+    if(ran.length>=2){
+      const avg=ran.reduce((a,x)=>a+x.km,0)/ran.length;cap=Math.max(avg*1.15,avg+3);
+      if(weekKm>cap+0.05)msgs.push('This week is '+r1(weekKm)+' km against your recent average of '+r1(avg)+' km (+'+Math.round((weekKm/avg-1)*100)+'%). Hold this level for a week before building again.');
+    }
+  }
+  const longest=S.runs.filter(r=>r.d>=mon&&r.d<=addDays(mon,6)).reduce((a,r)=>Math.max(a,r.km),0);
+  const prevMax=S.runs.filter(r=>r.d<mon&&r.d>=addDays(mon,-28)).reduce((a,r)=>Math.max(a,r.km),0);
+  if(prevMax>0&&longest>Math.max(prevMax*1.25,prevMax+2))msgs.push('Longest run this week is '+r1(longest)+' km; the most in the previous 4 weeks was '+r1(prevMax)+' km. Build the long run by about 1 km at a time.');
+  return {msgs,cap,weekKm};
+}
 function signal(){
   const live=S.runs.filter(r=>r.d<=TODAY&&runTime(r)>S.clearedAt);
   /* Red stays on until you confirm someone has assessed you: it does not expire after 7 days. */
@@ -439,8 +472,10 @@ function signal(){
   const cramps=live.filter(r=>r.cramp&&dayDiff(r.d,TODAY)<14);
   if(cramps.length>=2)return {lvl:'bad',sticky:true,title:'Red: recurring cramp',text:'Cramp logged on '+cramps.length+' runs in the last 14 days. Stop running and get assessed before the next run.'};
   const rec=S.runs.filter(r=>{const k=dayDiff(r.d,TODAY);return k>=0&&k<7;}).sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:runTime(b)-runTime(a));
-  if(!rec.length)return {lvl:'',title:'No runs in the last 7 days',text:'Log a run to see your recovery signal.'};
+  const ck=checkinSignal();
+  if(!rec.length)return ck||{lvl:'',title:'No runs in the last 7 days',text:'Log a run or do your morning check-in to see your recovery signal.'};
   if(rec.find(r=>r.pain>=3||r.cramp)||(rec[0].rpe>=6&&!isHard(rec[0])))return {lvl:'warn',title:'Amber: ease off',text:TODAY<=LAST?'Shorten the next run or swap it for a walk. Skip the Friday and Sunday runs, and do not add strength load.':'Shorten the next run or swap it for a walk. No quality session and no strength progression until it settles.'};
+  if(ck)return ck;
   const hard=rec.filter(isHard).sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:0);
   if(hard.some((r,i)=>i>0&&dayDiff(hard[i-1].d,r.d)<=1))return {lvl:'warn',title:'Amber: hard sessions too close',text:'Two tempo, interval or race efforts within 48 hours. Keep the next two days easy or rest.'};
   return {lvl:'ok',title:'Green: run as planned',text:'Pain stayed at 2/10 or below, no cramp, and easy runs stayed easy.'};
@@ -471,6 +506,9 @@ function summary(){
   WEEKS.forEach(w=>{const i=weekInfo(w);L.push('Week '+(w+1)+' ('+fmtShort(i.s)+'–'+fmtShort(i.e)+'): '+r1(i.actual)+' km logged of '+i.planned+' planned; core runs '+i.coreDone+'/'+i.core);});
   if(TODAY>LAST){L.push('','Recent weeks (Mon–Sun):');recentWeeks(4).forEach(w=>L.push('Week of '+fmtShort(w.s)+': '+r1(w.km)+' km, '+w.n+' runs, '+w.hard+' quality'));}
   const sig=signal();L.push('','Recovery signal: '+sig.title);
+  const rc=rampCheck();if(rc.msgs.length)L.push('Ramp check: '+rc.msgs.join(' '));
+  const cks=Object.keys(S.checkins).filter(k=>k<=TODAY&&dayDiff(k,TODAY)<7).sort();
+  if(cks.length){L.push('','Morning check-ins (last 7 days):');cks.forEach(k=>{const c=S.checkins[k];L.push(k+' | sleep '+c.sleep+' | tightness '+c.tight+'/10 | energy '+c.energy);});}
   if(S.clearedAt)L.push('Marked as assessed/cleared on '+ymd(new Date(S.clearedAt)));
   L.push('','Runs:');
   const rs=S.runs.slice().sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:runTime(a)-runTime(b));
@@ -540,7 +578,7 @@ function calStrip(){
     days+='<div class="day'+(d===TODAY?' now':'')+'" title="'+esc(fmt(d))+'"><span>'+dow(d).slice(0,1)+'</span><span class="'+cls+'">'+(rs.length?(km>=10?Math.round(km):r1(km).replace(/\.0$/,'')):(d>TODAY?'':'–'))+'</span></div>';
   }
   return '<section class="week" aria-label="This week"><div class="week-head"><b>Week of '+fmtShort(mon)+'</b><span class="small muted">'+r1(w.km)+' km · '+w.n+' run'+(w.n===1?'':'s')+'</span></div><div class="strip">'+days+'</div></section>'
-   +'<div class="chips"><span class="chipstat"><b>'+r1(w.km)+'</b>km</span><span class="chipstat"><b>'+w.n+'</b>runs</span><span class="chipstat"><b>'+w.hard+'</b>quality</span></div>';
+   +'<div class="chips"><span class="chipstat"><b>'+r1(w.km)+'</b>km</span><span class="chipstat"><b>'+w.n+'</b>runs</span><span class="chipstat"><b>'+w.hard+'</b>quality</span>'+(function(){const c=rampCheck().cap;return c?'<span class="chipstat">cap <b>'+r1(c)+'</b>km</span>':'';})()+'</div>';
 }
 function trendChart(n){
   const ws=recentWeeks(n),max=Math.max(1,Math.max.apply(null,ws.map(w=>w.km)));
@@ -568,11 +606,13 @@ function actCard(r){
   }
   const fadeP=st&&st.fade!=null?'<span class="pill '+(st.fade>5?'warn':'')+'">Fade '+(st.fade>=0?'+':'')+st.fade.toFixed(1)+'%</span>':'';
   return '<article class="act"><div class="act-head"><span class="ico" aria-hidden="true">'+IC.run+'</span><div><div class="act-title">'+esc(title)+'</div><div class="act-meta">'+fmt(r.d)+(r.heat?' · '+esc(r.heat):'')+(r.shoe?' · '+esc(r.shoe):'')+'</div></div>'
-   +'<button class="more'+(pendingDel===r.id?' danger':'')+'" type="button" data-act="del" data-id="'+esc(r.id)+'" aria-label="Delete this run">'+(pendingDel===r.id?'Delete?':'⋯')+'</button></div>'
+   +'<button class="more" type="button" data-act="menu" data-id="'+esc(r.id)+'" aria-label="Run options" aria-expanded="'+(pendingMenu===r.id)+'">⋯</button></div>'
    +'<div class="act-stats"><div><span>Distance</span><b>'+r1(r.km)+'<small>km</small></b></div><div>'+mid+'</div><div><span>Time</span><b>'+(r.min?fmtDur(r.min):'–')+'</b></div></div>'
    +ivHtml
    +'<div class="act-foot">'+(isHard(r)||r.type==='strides'?'<span class="pill">'+esc(tl)+'</span>':'')+'<span class="pill">RPE '+r.rpe+'</span><span class="pill '+pc+'">Pain '+r.pain+(r.area&&r.area!=='None'?' · '+esc(r.area):'')+'</span>'+(r.cramp?'<span class="pill warn">Cramp</span>':'')+(r.sharp?'<span class="pill bad">Sharp / limp</span>':'')+fadeP+(p&&!isHard(r)&&r.km>p.km*1.15?'<span class="pill warn">Over plan</span>':'')+'</div>'
-   +(r.note?'<p class="act-note">'+esc(r.note)+'</p>':'')+'</article>';
+   +(r.note?'<p class="act-note">'+esc(r.note)+'</p>':'')
+   +(pendingMenu===r.id?'<div class="row"><button class="btn small" type="button" data-act="edit" data-id="'+esc(r.id)+'">Edit</button><button class="btn small '+(pendingDel===r.id?'danger':'ghost')+'" type="button" data-act="del" data-id="'+esc(r.id)+'">'+(pendingDel===r.id?'Tap again to delete':'Delete')+'</button><button class="btn small ghost" type="button" data-act="menu" data-id="'+esc(r.id)+'">Cancel</button></div>':'')
+   +'</article>';
 }
 function greeting(){
   const h=new Date().getHours();
@@ -580,7 +620,7 @@ function greeting(){
   return g+(S.name?', '+S.name:'');
 }
 function viewHome(){
-  let out='<p class="hello">'+esc(greeting())+'</p>';
+  let out='<p class="hello">'+esc(greeting())+'</p>'+(S.checkins[TODAY]&&!checkEdit?'':checkinCard());
   const sig=signal();
   if(TODAY<FIRST_RUN){
     const n=dayDiff(TODAY,FIRST_RUN);
@@ -599,6 +639,9 @@ function viewHome(){
     const p=PLAN.find(x=>x.d===TODAY);if(p)out+=hero(p);
     out+=sigCard(sig);
   }
+  if(S.checkins[TODAY]&&!checkEdit)out+=checkinCard();
+  const rc=rampCheck();
+  if(rc.msgs.length)out+='<div class="banner warn" role="status"><b>Ramp check.</b> '+rc.msgs.map(esc).join(' ')+'</div>';
   if(S.runs.length&&Date.now()-S.lastBackup>7*864e5){
     out+='<div class="banner warn"><b>Back up your log.</b> '+(S.lastBackup?'Last backup '+fmtShort(ymd(new Date(S.lastBackup)))+'.':'No backup yet.')+' Your runs live only on this phone. <a href="#progress">Export on Progress</a>.</div>';
   }
@@ -625,7 +668,7 @@ const seg=(name,vals,sel,cls,lv)=>'<div class="seg '+cls+'" role="radiogroup">'+
 const painLv=v=>v>=5?'bad':v>=3?'warn':'ok';
 function viewLog(){
   const d=logDate||TODAY;const pl=planRunOn(d);
-  return '<div class="h-sec" style="margin-top:8px"><span>Log a run</span></div>'
+  return '<div class="h-sec" style="margin-top:8px"><span>'+(editId?'Edit run':'Log a run')+'</span></div>'
    +(pl?'<div class="card" style="margin-top:0;display:flex;gap:12px;align-items:center"><span class="ico" aria-hidden="true">'+IC.run+'</span><div><b>'+esc(pl.label)+' · '+pl.km+' km</b><div class="small muted">Planned '+fmt(d)+' · ceiling '+esc(pl.pace)+'/km · RPE '+esc(pl.rpe)+'</div></div></div>':'')
    +'<form id="runform" class="form" autocomplete="off" style="margin-top:16px" onsubmit="return false">'
    +'<div class="field"><span class="flabel">Session type</span>'+seg('type',TYPES,planType(pl),'c4')+'</div>'
@@ -651,7 +694,7 @@ function viewLog(){
    +'<div class="field"><span class="flabel">Shoe</span>'+seg('shoe',[[SH_S,'Superblast 3'],[SH_V,'Velocity Nitro 4'],['Other','Other']],pl?pl.shoe:SH_S,'c3')+'</div>'
    +'<div class="field"><span class="flabel">Weather</span>'+seg('heat',['Cool','Warm','Hot and humid'],'Warm','c3')+'</div>'
    +'<div class="field"><label for="f-note">Note</label><input id="f-note" type="text" maxlength="300" placeholder="Sleep, work, how your legs felt"></div>'
-   +'<div class="savebar"><div id="f-err" class="err" role="alert"></div><button class="btn block" type="button" data-act="saverun">Save run</button></div>'
+   +'<div class="savebar"><div id="f-err" class="err" role="alert"></div><button class="btn block" type="button" data-act="saverun">'+(editId?'Save changes':'Save run')+'</button>'+(editId?'<button class="btn block ghost" type="button" data-act="canceledit" style="margin-top:8px">Cancel</button>':'')+'</div>'
    +'</form>';
 }
 function viewPlan(){
@@ -725,6 +768,7 @@ function render(){
   const t=tab();lastTab=t;
   const v={home:viewHome,log:viewLog,plan:viewPlan,runs:viewRuns,progress:viewProgress}[t]();
   $('#app').innerHTML=shell(t,v);
+  if(t==='log'&&editId)fillEdit();
   setStatus();
 }
 
@@ -755,6 +799,7 @@ function importBackup(file){
     const have=new Set(S.runs.map(r=>r.id));let added=0;
     inc.runs.forEach(r=>{if(!have.has(r.id)){S.runs.push(r);added++;}});
     Object.keys(inc.strength).forEach(k=>{if(inc.strength[k])S.strength[k]=true;});
+    Object.keys(inc.checkins).forEach(k=>{if(!S.checkins[k])S.checkins[k]=inc.checkins[k];});
     if(!S.name&&inc.name)S.name=inc.name;
     S.clearedAt=Math.max(S.clearedAt,inc.clearedAt);S.lastBackup=Math.max(S.lastBackup,inc.lastBackup);
     save(0);render();msg('Imported '+added+' new run'+(added===1?'':'s')+'. Runs already here were kept.');
@@ -808,6 +853,48 @@ function toggleIv(){
   if(!on){const km=document.getElementById('f-km'),pl=planRunOn(document.getElementById('f-date').value);if(km)km.placeholder=pl?pl.km.toFixed(1):'3.0';}
 }
 
+/* Pre-fills the Log form with the run being edited. Runs after every render of the Log tab while editing. */
+function fillEdit(){
+  const r=S.runs.find(x=>x.id===editId);if(!r){editId=null;return;}
+  const g=i=>document.getElementById(i);
+  const setR=(n,v)=>{document.querySelectorAll('input[name="'+n+'"]').forEach(el=>{el.checked=String(el.value)===String(v);});};
+  g('f-km').value=r.km;g('f-time').value=r.min?fmtDur(r.min):'';g('f-date').value=r.d;
+  setR('type',r.type||'easy');setR('rpe',r.rpe);setR('pain',r.pain);setR('shoe',r.shoe);setR('heat',r.heat);
+  g('f-area').value=r.area||'None';g('f-cramp').checked=!!r.cramp;g('f-sharp').checked=!!r.sharp;g('f-note').value=r.note||'';
+  if(r.type==='intervals'&&r.iv){
+    const iv=r.iv;
+    g('iv-n').value=iv.n;g('iv-size').value=iv.size;setR('ivunit',iv.unit||'m');
+    g('iv-wu').value=iv.wu||'';g('iv-cd').value=iv.cd||'';
+    const k=iv.rec&&iv.rec.kind?iv.rec.kind:'jog';setR('ivrec',k.charAt(0).toUpperCase()+k.slice(1));
+    g('iv-rec').value=iv.rec&&iv.rec.min?fmtDur(iv.rec.min):'';
+    toggleIv();renderReps();
+    document.querySelectorAll('#iv-reps input').forEach((inp,i)=>{const x=iv.reps&&iv.reps[i];if(!x)return;inp.value=iv.unit==='min'?(x.d>0?Math.round(x.d*1000):''):(x.t>0?fmtDur(x.t):'');});
+    updateIv();
+  }else toggleIv();
+  const pe=g('f-pace');if(pe)pe.textContent=(r.min&&r.km)?fmtPace(r.min/r.km):'–';
+}
+
+/* ---------- morning check-in ---------- */
+const CK_LABEL={good:'Good',ok:'OK',poor:'Poor',low:'Low'};
+function checkinCard(){
+  const c=S.checkins[TODAY];
+  if(c&&!checkEdit){
+    return '<div class="checked" role="status"><span>Check-in</span><b>Sleep '+esc(CK_LABEL[c.sleep]||c.sleep)+'</b><b>Tightness '+c.tight+'/10</b><b>Energy '+esc(CK_LABEL[c.energy]||c.energy)+'</b><button class="more" type="button" data-act="recheck" aria-label="Edit check-in">✎</button></div>';
+  }
+  return '<section class="card checkin" aria-label="Morning check-in"><div class="wk-title"><b>Morning check-in</b><span class="small muted">10 seconds</span></div>'
+   +'<div class="field" style="margin-top:12px"><span class="flabel">Last night\'s sleep</span>'+seg('ck-sleep',[['good','Good'],['ok','OK'],['poor','Poor']],c?c.sleep:'ok','c3')+'</div>'
+   +'<div class="field" style="margin-top:12px"><span class="flabel">Calf / thigh tightness this morning (0–10)</span>'+seg('ck-tight',[0,1,2,3,4,5,6,7,8,9,10],c?c.tight:0,'c6',painLv)+'</div>'
+   +'<div class="field" style="margin-top:12px"><span class="flabel">Energy</span>'+seg('ck-energy',[['low','Low'],['ok','OK'],['good','Good']],c?c.energy:'ok','c3')+'</div>'
+   +'<div class="row"><button class="btn block" type="button" data-act="checkin">Save check-in</button></div></section>';
+}
+function saveCheckin(){
+  S.checkins[TODAY]={sleep:pickR('ck-sleep')||'ok',tight:+pickR('ck-tight')||0,energy:pickR('ck-energy')||'ok',at:Date.now()};
+  checkEdit=false;
+  const sig=signal();
+  banner={lvl:sig.lvl==='bad'?'bad':sig.lvl==='warn'?'warn':'ok',msg:'Check-in saved. '+sig.title+'.'};
+  render();window.scrollTo(0,0);save(0);
+}
+
 /* ---------- actions ---------- */
 function saveRun(){
   const g=id=>document.getElementById(id);const err=g('f-err');
@@ -824,12 +911,17 @@ function saveRun(){
   if(!(km>0&&km<60)){err.textContent='Enter the distance in km, for example 3.2.';g('f-km').focus();return;}
   if(raw.trim()&&!(min>0)){err.textContent='Enter the time as mm:ss, for example 21:30.';g('f-time').focus();return;}
   const now=Date.now();
-  S.runs.push({id:now.toString(36)+Math.random().toString(36).slice(2,6),at:now,d:d,type:type,iv:iv||undefined,km:Math.round(km*100)/100,min:min,rpe:+pick('rpe')||3,pain:+pick('pain')||0,area:g('f-area').value,sharp:g('f-sharp').checked,cramp:g('f-cramp').checked,shoe:pick('shoe'),heat:pick('heat'),note:g('f-note').value.trim().slice(0,300)});
+  const old=editId?S.runs.find(x=>x.id===editId):null;
+  const rec={id:old?old.id:now.toString(36)+Math.random().toString(36).slice(2,6),at:old?(old.at||now):now,d:d,type:type,iv:iv||undefined,km:Math.round(km*100)/100,min:min,rpe:+pick('rpe')||3,pain:+pick('pain')||0,area:g('f-area').value,sharp:g('f-sharp').checked,cramp:g('f-cramp').checked,shoe:pick('shoe'),heat:pick('heat'),note:g('f-note').value.trim().slice(0,300)};
+  /* If an edit adds a red flag, treat it as new so an earlier "cleared" tap cannot hide it. */
+  if(old&&(isRedRun(rec)||rec.cramp)&&!(isRedRun(old)||old.cramp))rec.at=now;
+  if(old)S.runs[S.runs.indexOf(old)]=rec;else S.runs.push(rec);
+  editId=null;
   TODAY=ymd(new Date());
   const sig=signal();
-  banner={lvl:sig.lvl==='bad'?'bad':sig.lvl==='warn'?'warn':'ok',msg:'Run saved. '+sig.title+'. '+sig.text};
+  banner={lvl:sig.lvl==='bad'?'bad':sig.lvl==='warn'?'warn':'ok',msg:(old?'Run updated. ':'Run saved. ')+sig.title+'. '+sig.text};
   logDate=null;
-  location.hash='home';lastTab='home';render();window.scrollTo(0,0);
+  const dest=old?'runs':'home';location.hash=dest;lastTab=dest;render();window.scrollTo(0,0);
   save(0);
 }
 document.addEventListener('click',function(e){
@@ -838,9 +930,14 @@ document.addEventListener('click',function(e){
   if(a==='saverun')saveRun();
   else if(a==='logfor'){logDate=b.getAttribute('data-d');location.hash='log';lastTab='log';render();window.scrollTo(0,0);}
   else if(a==='strength'){const d=b.getAttribute('data-d');S.strength[d]=!S.strength[d];if(!S.strength[d])delete S.strength[d];render();save(300);}
+  else if(a==='menu'){const id=b.getAttribute('data-id');pendingMenu=pendingMenu===id?null:id;pendingDel=null;render();}
+  else if(a==='edit'){const id=b.getAttribute('data-id');if(S.runs.some(r=>r.id===id)){editId=id;pendingMenu=null;pendingDel=null;logDate=S.runs.find(r=>r.id===id).d;location.hash='log';lastTab='log';render();window.scrollTo(0,0);}}
+  else if(a==='canceledit'){editId=null;location.hash='runs';}
+  else if(a==='checkin')saveCheckin();
+  else if(a==='recheck'){checkEdit=true;render();}
   else if(a==='del'){
     const id=b.getAttribute('data-id');
-    if(pendingDel===id){S.runs=S.runs.filter(r=>r.id!==id);pendingDel=null;render();save(0);}
+    if(pendingDel===id){S.runs=S.runs.filter(r=>r.id!==id);pendingDel=null;pendingMenu=null;render();save(0);}
     else{pendingDel=id;render();}
   }else if(a==='clear'){
     if(pendingClear){S.clearedAt=Date.now();pendingClear=false;banner={lvl:'ok',msg:'Marked as assessed. Restart gently and follow what your physio or doctor advised.'};render();save(0);}
@@ -869,7 +966,7 @@ document.addEventListener('input',function(e){
     const el=document.getElementById('f-pace');if(el)el.textContent=(km>0&&min>0)?fmtPace(min/km):'–';
   }
 });
-window.addEventListener('hashchange',function(){if(tab()!==lastTab){banner=null;pendingDel=null;pendingClear=false;if(tab()!=='log')logDate=null;}render();window.scrollTo(0,0);});
+window.addEventListener('hashchange',function(){if(tab()!==lastTab){banner=null;pendingDel=null;pendingMenu=null;pendingClear=false;checkEdit=false;if(tab()!=='log'){logDate=null;editId=null;}}render();window.scrollTo(0,0);});
 /* Re-render when the app comes back to the foreground, so the date and Home card are current. */
 document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&ymd(new Date())!==TODAY&&tab()!=='log')render();});
 window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();installEvt=e;if(tab()==='progress')render();});
