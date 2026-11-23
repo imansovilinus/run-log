@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Comeback Run Log</title>
-<meta name="description" content="Personal 4-week running comeback tracker.">
+<title>Second Wind</title>
+<meta name="description" content="Second Wind: personal running comeback tracker.">
 <meta name="theme-color" content="#F1F3F2" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#090E0C" media="(prefers-color-scheme: dark)">
 <link rel="manifest" href="manifest.webmanifest">
@@ -13,7 +13,7 @@
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Run Log">
+<meta name="apple-mobile-web-app-title" content="Second Wind">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -62,6 +62,7 @@ a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,te
 .save{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface);white-space:nowrap}
 .h-sec{font:700 15px/1 var(--display);text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin:22px 0 10px;display:flex;justify-content:space-between;align-items:baseline}
 .h-sec a{font:600 14px var(--body);text-transform:none;letter-spacing:0;text-decoration:none}
+.hello{font:700 30px/1.05 var(--display);text-transform:uppercase;letter-spacing:.02em;margin:6px 0 12px}
 h2{font:700 26px/1.05 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0}
 
 /* hero */
@@ -226,7 +227,7 @@ input[type="file"]{display:none}
 </style>
 </head>
 <body>
-<div id="app"><div class="wrap"><div class="top"><p class="brand"><i></i>Run Log</p></div><p class="muted">Loading…</p></div></div>
+<div id="app"><div class="wrap"><div class="top"><p class="brand"><i></i>Second Wind</p></div><p class="muted">Loading…</p></div></div>
 <div id="update" class="update" role="status" hidden><span>A new version is ready.</span><button class="btn small" type="button" data-act="update">Reload</button></div>
 <script>
 (function(){
@@ -314,23 +315,26 @@ const AREAS=['None','Calf (left)','Calf (right)','Thigh (left)','Thigh (right)',
 const LS_KEY='runlog_v1',DB_NAME='comeback-run-log';
 function normalize(s){
   if(!s||typeof s!=='object')s={};
-  return {runs:Array.isArray(s.runs)?s.runs.filter(r=>r&&r.id&&r.d&&r.km>0):[],strength:(s.strength&&typeof s.strength==='object')?s.strength:{},updated:+s.updated||0,clearedAt:+s.clearedAt||0,lastBackup:+s.lastBackup||0};
+  return {runs:Array.isArray(s.runs)?s.runs.filter(r=>r&&r.id&&r.d&&r.km>0):[],strength:(s.strength&&typeof s.strength==='object')?s.strength:{},updated:+s.updated||0,clearedAt:+s.clearedAt||0,lastBackup:+s.lastBackup||0,name:typeof s.name==='string'?s.name.trim().slice(0,30):''};
 }
 function idb(){
   return new Promise((res,rej)=>{
     if(!('indexedDB' in window))return rej(new Error('no idb'));
     const r=indexedDB.open(DB_NAME,1);
     r.onupgradeneeded=()=>r.result.createObjectStore('kv');
-    r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+    r.onsuccess=()=>{const d=r.result;d.onversionchange=()=>{d.close();dbp=null;};res(d);};
+    r.onerror=()=>{dbp=null;rej(r.error);};r.onblocked=()=>{dbp=null;rej(new Error('idb blocked'));};
   });
 }
 let dbp=null;
+/* Storage must never leave the app stuck on "Loading": give IndexedDB 2 s, then fall back to the localStorage mirror. */
+const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(new Error('timeout')),ms))]);
 const db=()=>dbp||(dbp=idb());
 async function idbGet(k){const d=await db();return new Promise((res,rej)=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
 async function idbSet(k,v){const d=await db();return new Promise((res,rej)=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
 async function loadState(){
   let a=null,b=null;
-  try{a=await idbGet('state');}catch(e){}
+  try{a=await withTimeout(idbGet('state'),2000);}catch(e){dbp=null;}
   try{b=JSON.parse(localStorage.getItem(LS_KEY)||'null');}catch(e){}
   a=a?normalize(a):null;b=b?normalize(b):null;
   if(a&&b)return a.updated>=b.updated?a:b;
@@ -344,8 +348,8 @@ function save(delay){S.updated=Date.now();clearTimeout(saveTimer);saveState='pen
 async function doSave(){
   const snap=JSON.parse(JSON.stringify(S));
   let ok=false;
-  try{await idbSet('state',snap);ok=true;}catch(e){}
   try{localStorage.setItem(LS_KEY,JSON.stringify(snap));ok=true;}catch(e){}
+  try{await withTimeout(idbSet('state',snap),2000);ok=true;}catch(e){dbp=null;}
   saveState=ok?'saved':'error';setStatus();
 }
 function setStatus(){
@@ -410,7 +414,7 @@ function gates(){
 }
 function easyAvg(from,to){const xs=S.runs.filter(r=>r.d>=from&&r.d<=to&&r.rpe<=4&&r.min>0&&r.km>0).map(r=>r.min/r.km);return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null;}
 function summary(){
-  const L=['Running comeback log, as of '+TODAY,''];
+  const L=['Second Wind running log, as of '+TODAY,''];
   WEEKS.forEach(w=>{const i=weekInfo(w);L.push('Week '+(w+1)+' ('+fmtShort(i.s)+'–'+fmtShort(i.e)+'): '+r1(i.actual)+' km logged of '+i.planned+' planned; core runs '+i.coreDone+'/'+i.core);});
   const sig=signal();L.push('','Recovery signal: '+sig.title);
   if(S.clearedAt)L.push('Marked as assessed/cleared on '+ymd(new Date(S.clearedAt)));
@@ -483,8 +487,13 @@ function actCard(r){
    +'<div class="act-foot"><span class="pill">RPE '+r.rpe+'</span><span class="pill '+pc+'">Pain '+r.pain+(r.area&&r.area!=='None'?' · '+esc(r.area):'')+'</span>'+(r.cramp?'<span class="pill warn">Cramp</span>':'')+(r.sharp?'<span class="pill bad">Sharp / limp</span>':'')+(p&&r.km>p.km*1.15?'<span class="pill warn">Over plan</span>':'')+'</div>'
    +(r.note?'<p class="act-note">'+esc(r.note)+'</p>':'')+'</article>';
 }
+function greeting(){
+  const h=new Date().getHours();
+  const g=h<5?'Up early':h<12?'Good morning':h<18?'Good afternoon':'Good evening';
+  return g+(S.name?', '+S.name:'');
+}
 function viewHome(){
-  let out='';
+  let out='<p class="hello">'+esc(greeting())+'</p>';
   const sig=signal();
   if(TODAY<FIRST_RUN){
     const n=dayDiff(TODAY,FIRST_RUN);
@@ -577,6 +586,7 @@ function viewProgress(){
   const g=gates();
   out+='<div class="h-sec"><span>January gate</span></div><div class="card" style="margin-top:0"><p class="small muted" style="margin-top:0">Move on to a light quality session only when all of these are met. If not, repeat Week 3 or 4. That is not failing.</p>'
    +g.map(x=>'<div class="gate"><span class="mark '+(x.ok===true?'ok':'')+'">'+(x.ok===true?'✓':x.ok===false?'':'?')+'</span><div><b>'+esc(x.t)+'</b><br><span class="small muted">'+esc(x.d)+'</span></div></div>').join('')+'</div>';
+  out+='<div class="h-sec"><span>You</span></div><div class="card" style="margin-top:0"><div class="field"><label for="f-name">Your name</label><div style="display:flex;gap:8px"><input id="f-name" type="text" maxlength="30" autocomplete="given-name" value="'+esc(S.name)+'" placeholder="First name"><button class="btn" type="button" data-act="savename">Save</button></div><div class="hint">Shown in the Home greeting. Saved only on this phone, never in the app code.</div></div></div>';
   out+='<div class="h-sec"><span>Summary for Claude</span></div><div class="card" style="margin-top:0"><p class="small muted" style="margin-top:0">Copy this into your chat and I will adjust the next week from it.</p><textarea id="sumtext" class="out" readonly>'+esc(summary())+'</textarea><div class="row"><button class="btn" type="button" data-act="copy">Copy summary</button><span id="copymsg" class="small muted" role="status"></span></div></div>';
   out+='<div class="h-sec"><span>Backup</span></div><div class="card" style="margin-top:0"><p class="small muted" style="margin-top:0">Your log is stored only on this phone. Export a backup every week or so, and before changing phones or clearing browser data. Importing merges a backup into what is here.</p>'
    +'<p class="small" style="margin:0">Last backup: <b>'+(S.lastBackup?fmt(ymd(new Date(S.lastBackup))):'never')+'</b> · '+S.runs.length+' run'+(S.runs.length===1?'':'s')+' stored</p>'
@@ -597,7 +607,7 @@ function shell(t,body){
   else if(TODAY>LAST)phase='Four-week programme finished';
   else{const w=curWeek();phase='Week '+(w+1)+' of 4 · '+WEEK_TITLES[w];}
   const nav=[['home','Home',IC.home],['plan','Plan',IC.plan],['log','Log',IC.plus],['runs','Runs',IC.feed],['progress','Progress',IC.stats]];
-  return '<div class="wrap"><header class="top"><div><p class="brand"><i aria-hidden="true"></i>Comeback Run Log</p><p class="phase">'+esc(phase)+'</p></div><span id="save" class="save" role="status"></span></header>'
+  return '<div class="wrap"><header class="top"><div><p class="brand"><i aria-hidden="true"></i>Second Wind</p><p class="phase">'+esc(phase)+'</p></div><span id="save" class="save" role="status"></span></header>'
    +(banner?'<div class="banner '+esc(banner.lvl||'')+'" role="status" style="margin-top:0;margin-bottom:12px">'+esc(banner.msg)+'</div>':'')
    +'<main>'+body+'</main></div>'
    +'<nav class="nav" aria-label="Sections"><div class="nav-in">'+nav.map(n=>n[0]==='log'
@@ -617,7 +627,7 @@ function exportBackup(){
   S.lastBackup=Date.now();
   const data=JSON.stringify({app:'comeback-run-log',version:1,exported:new Date().toISOString(),state:S},null,1);
   const blob=new Blob([data],{type:'application/json'});
-  const name='comeback-run-log-'+ymd(new Date())+'.json';
+  const name='second-wind-backup-'+ymd(new Date())+'.json';
   const done=()=>{save(0);render();const m=$('#bkmsg');if(m)m.textContent='Backup saved as '+name+'.';};
   try{
     const file=new File([blob],name,{type:'application/json'});
@@ -639,6 +649,7 @@ function importBackup(file){
     const have=new Set(S.runs.map(r=>r.id));let added=0;
     inc.runs.forEach(r=>{if(!have.has(r.id)){S.runs.push(r);added++;}});
     Object.keys(inc.strength).forEach(k=>{if(inc.strength[k])S.strength[k]=true;});
+    if(!S.name&&inc.name)S.name=inc.name;
     S.clearedAt=Math.max(S.clearedAt,inc.clearedAt);S.lastBackup=Math.max(S.lastBackup,inc.lastBackup);
     save(0);render();msg('Imported '+added+' new run'+(added===1?'':'s')+'. Runs already here were kept.');
   };
@@ -681,7 +692,8 @@ document.addEventListener('click',function(e){
     const ta=document.getElementById('sumtext'),msg=document.getElementById('copymsg');
     const fallback=()=>{ta.focus();ta.select();if(msg)msg.textContent='Press and hold, then tap Copy.';};
     try{navigator.clipboard.writeText(ta.value).then(()=>{if(msg)msg.textContent='Copied.';}).catch(fallback);}catch(err){fallback();}
-  }else if(a==='export')exportBackup();
+  }else if(a==='savename'){const f=document.getElementById('f-name');S.name=(f?f.value:'').trim().slice(0,30);banner={lvl:'ok',msg:S.name?'Saved. Hi, '+S.name+'!':'Name cleared.'};render();save(0);}
+  else if(a==='export')exportBackup();
   else if(a==='import'){const f=document.getElementById('importfile');if(f){f.value='';f.click();}}
   else if(a==='install'&&installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;render();});}
   else if(a==='update'){const w=window.__swWaiting;if(w)w.postMessage('SKIP_WAITING');else location.reload();}

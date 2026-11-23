@@ -1,7 +1,7 @@
 {
-  "name": "Comeback Run Log",
-  "short_name": "Run Log",
-  "description": "Personal 4-week running comeback tracker.",
+  "name": "Second Wind",
+  "short_name": "Second Wind",
+  "description": "Personal running comeback tracker.",
   "id": "./",
   "start_url": "./#today",
   "scope": "./",

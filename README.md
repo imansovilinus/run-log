@@ -1,4 +1,4 @@
-# Comeback Run Log (PWA)
+# Second Wind (PWA)
 
 An installable, offline web app version of the tracker. Your runs are stored **only on your phone**
 (IndexedDB, mirrored to localStorage). Nothing is sent to a server.
