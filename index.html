@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comeback Run Log</title>
+<meta name="description" content="Personal 4-week running comeback tracker.">
+<meta name="theme-color" content="#17508A" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1620" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Run Log">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{
+  --bg:#F3F5F7;--surface:#FFFFFF;--ink:#101C26;--muted:#566876;--line:#D8E0E6;--accent:#17508A;--accent-ink:#FFFFFF;
+  --ok:#1D7A4A;--ok-bg:#E2F3E9;--warn:#8F5B00;--warn-bg:#FBEFD2;--bad:#B3261E;--bad-bg:#FBE3E0;
+  --display:'Barlow Condensed','Arial Narrow',system-ui,sans-serif;
+  --body:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0E1620;--surface:#15212D;--ink:#E7EEF4;--muted:#9BAAB7;--line:#26384A;--accent:#6FB2F2;--accent-ink:#07192A;
+    --ok:#5CD08F;--ok-bg:#12301F;--warn:#F0C060;--warn-bg:#3A2C0C;--bad:#FF8A80;--bad-bg:#3F1714;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0E1620;--surface:#15212D;--ink:#E7EEF4;--muted:#9BAAB7;--line:#26384A;--accent:#6FB2F2;--accent-ink:#07192A;
+  --ok:#5CD08F;--ok-bg:#12301F;--warn:#F0C060;--warn-bg:#3A2C0C;--bad:#FF8A80;--bad-bg:#3F1714;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:400 16px/1.45 var(--body);-webkit-text-size-adjust:100%}
+.wrap{max-width:720px;margin:0 auto;padding:16px 16px 72px}
+header{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;padding:8px 0 4px}
+h1{font:700 34px/1 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0}
+h2{font:700 24px/1.1 var(--display);letter-spacing:.02em;text-transform:uppercase;margin:0 0 8px;text-wrap:balance}
+h3{font:600 16px/1.2 var(--body);margin:0 0 6px}
+.sub{color:var(--muted);font-size:14px;margin:6px 0 0}
+.save{font-size:12px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:3px 10px;background:var(--surface)}
+nav{position:sticky;top:0;z-index:5;display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:10px 0;background:var(--bg)}
+nav a{display:block;text-align:center;padding:10px 4px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);text-decoration:none;font:600 15px var(--body)}
+nav a[aria-current="page"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+a:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;margin-top:12px}
+.stack{display:flex;flex-direction:column;gap:12px}
+.muted{color:var(--muted)}
+.small{font-size:14px}
+.banner{margin-top:12px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--surface);font-size:15px}
+.banner.ok,.sig.ok{background:var(--ok-bg);border-color:var(--ok);color:var(--ink)}
+.banner.warn,.sig.warn{background:var(--warn-bg);border-color:var(--warn);color:var(--ink)}
+.banner.bad,.sig.bad{background:var(--bad-bg);border-color:var(--bad);color:var(--ink)}
+.sig{border:1px solid var(--line);border-left-width:8px;border-radius:12px;padding:14px 16px;margin-top:12px;background:var(--surface)}
+.sig b{display:block;font:700 20px/1.2 var(--display);letter-spacing:.02em;text-transform:uppercase}
+.big{font:700 64px/0.9 var(--display);font-variant-numeric:tabular-nums}
+.big small{font-size:24px;margin-left:4px;color:var(--muted)}
+.facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin:12px 0 0}
+.fact{border-top:2px solid var(--line);padding-top:6px}
+.fact span{display:block;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.fact b{font:600 18px/1.2 var(--body);font-variant-numeric:tabular-nums}
+.btn{appearance:none;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);font:600 16px var(--body);padding:12px 18px;border-radius:10px;cursor:pointer;min-height:44px}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn.small{padding:6px 12px;min-height:36px;font-size:14px}
+.btn.danger{border-color:var(--bad);color:var(--bad);background:transparent}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:12px}
+form{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+label{display:flex;flex-direction:column;gap:4px;font-size:14px;font-weight:600}
+label.full,.full{grid-column:1/-1}
+input,select,textarea{font:400 16px var(--body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;min-height:44px;width:100%}
+input[type="checkbox"]{width:22px;height:22px;min-height:0;accent-color:var(--accent);flex:none}
+label.check{flex-direction:row;align-items:center;gap:10px;font-weight:500}
+.hint{font-weight:400;color:var(--muted);font-size:13px}
+.err{color:var(--bad);font-size:14px;min-height:20px}
+.pill{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap}
+.pill.ok{background:var(--ok-bg);border-color:var(--ok);color:var(--ok)}
+.pill.warn{background:var(--warn-bg);border-color:var(--warn);color:var(--warn)}
+.pill.bad{background:var(--bad-bg);border-color:var(--bad);color:var(--bad)}
+ul.list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+ul.list li{display:grid;grid-template-columns:84px 1fr auto;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+ul.list li:first-child{border-top:0}
+ul.list li.rest{color:var(--muted)}
+.d{font:600 14px var(--body);font-variant-numeric:tabular-nums}
+.wk{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}
+.wk b{font:700 20px var(--display);text-transform:uppercase;letter-spacing:.02em}
+.bar{height:14px;border-radius:7px;background:var(--line);overflow:hidden;position:relative}
+.bar i{display:block;height:100%;background:var(--accent)}
+.bar i.over{background:var(--warn)}
+.gate{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.gate:first-of-type{border-top:0}
+.mark{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:14px;border:2px solid var(--line);color:var(--muted)}
+.mark.ok{border-color:var(--ok);background:var(--ok-bg);color:var(--ok)}
+textarea.out{min-height:200px;font:400 13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.update{position:fixed;left:16px;right:16px;bottom:16px;z-index:10;max-width:688px;margin:0 auto;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:12px 14px;border-radius:12px;background:var(--ink);color:var(--bg);box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.update[hidden]{display:none}
+.update .btn{background:var(--bg);color:var(--ink);border-color:var(--bg)}
+input[type="file"]{display:none}
+@media (max-width:480px){form{grid-template-columns:1fr}ul.list li{grid-template-columns:72px 1fr}ul.list li .st{grid-column:2}.big{font-size:56px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div id="app"><div class="wrap"><h1>Comeback Run Log</h1><p class="sub">Loading…</p></div></div>
+<div id="update" class="update" role="status" hidden><span>A new version is ready.</span><button class="btn small" type="button" data-act="update">Reload</button></div>
+<script>
+(function(){
+'use strict';
+
+/* ---------- helpers ---------- */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const toD=s=>{const p=s.split('-').map(Number);return new Date(p[0],p[1]-1,p[2]);};
+const dayDiff=(a,b)=>Math.round((toD(b)-toD(a))/864e5);
+const fmt=s=>toD(s).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'});
+const fmtShort=s=>toD(s).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+const fmtPace=m=>{if(!isFinite(m)||m<=0)return '–';const t=Math.round(m*60);return Math.floor(t/60)+':'+pad(t%60);};
+const fmtDur=m=>{const t=Math.round(m*60),h=Math.floor(t/3600),r=t%3600;return (h?h+':'+pad(Math.floor(r/60)):String(Math.floor(r/60)))+':'+pad(r%60);};
+const r1=n=>(Math.round(n*10)/10).toFixed(1);
+function parseTime(s){
+  s=String(s||'').trim();if(!s)return null;
+  const p=s.split(':').map(Number);
+  if(p.some(x=>isNaN(x)||x<0))return null;
+  if(p.length===1)return p[0];
+  if(p.length===2)return p[1]<60?p[0]+p[1]/60:null;
+  if(p.length===3)return (p[1]<60&&p[2]<60)?p[0]*60+p[1]+p[2]/60:null;
+  return null;
+}
+/* Recomputed on every render so an app left open overnight rolls over to the new day. */
+let TODAY=ymd(new Date());
+
+/* ---------- the plan (from the comeback doc) ---------- */
+const SH_V='Puma Velocity Nitro 4',SH_S='ASICS Superblast 3';
+const run=(d,km,pace,rpe,shoe,label,opt,note)=>({d,type:'run',km,pace,rpe,shoe,label,opt:!!opt,note:note||''});
+const st=(d,kind,label,min,rpe)=>({d,type:'strength',kind,label,min,rpe});
+const rest=(d,label)=>({d,type:'rest',label});
+const PLAN=[
+ rest('2026-11-30','Rest. Last day of your break.'),
+ run('2026-12-01',3,'6:50–7:20','3',SH_V,'Easy run'),
+ st('2026-12-02','A','Strength A (light)','20','4'),
+ run('2026-12-03',3,'6:50–7:20','3',SH_S,'Easy run'),
+ rest('2026-12-04','Rest or 10 min mobility'),
+ run('2026-12-05',4,'6:50–7:20','3–4',SH_S,'Easy long run',false,'Walk breaks allowed.'),
+ run('2026-12-06',2,'7:00–7:30','2–3',SH_V,'Recovery jog'),
+ rest('2026-12-07','Rest'),
+ run('2026-12-08',3,'6:50–7:20','3',SH_V,'Easy run'),
+ st('2026-12-09','A','Strength A (light)','20–25','4–5'),
+ run('2026-12-10',4,'6:50–7:20','3–4',SH_S,'Easy run'),
+ rest('2026-12-11','Rest or 10 min mobility'),
+ run('2026-12-12',5,'6:50–7:20','3–4',SH_S,'Easy long run'),
+ run('2026-12-13',2,'7:00–7:30','2–3',SH_V,'Recovery jog',false,"PBIM race day. Cheer, don't race."),
+ st('2026-12-14','B','Strength B','15','4'),
+ run('2026-12-15',3,'6:40–7:15','3–4',SH_V,'Easy run'),
+ st('2026-12-16','A','Strength A (3 sets)','25','5–6'),
+ run('2026-12-17',4,'6:40–7:15','3–4',SH_S,'Easy run'),
+ run('2026-12-18',2,'7:00–7:30','2–3',SH_V,'Optional very easy run',true,'Skip it if anything feels amber.'),
+ run('2026-12-19',6,'6:50–7:20','4',SH_S,'Easy long run'),
+ run('2026-12-20',2,'7:00–7:30','2–3',SH_V,'Recovery jog'),
+ st('2026-12-21','B','Strength B','15','4'),
+ run('2026-12-22',3,'6:45–7:15','3',SH_V,'Easy run'),
+ st('2026-12-23','A','Strength A (3 sets)','25','5–6'),
+ run('2026-12-24',3,'6:45–7:15','3–4',SH_S,'Easy run'),
+ run('2026-12-25',2,'7:00–7:30','2–3',SH_V,'Optional very easy run',true,'Skip it if anything feels amber.'),
+ run('2026-12-26',5,'6:50–7:20','3–4',SH_S,'Easy long run'),
+ run('2026-12-27',2,'7:00–7:30','2–3',SH_V,'Recovery jog')
+];
+const FIRST_RUN='2026-12-01',LAST=PLAN[PLAN.length-1].d;
+const WEEK_TITLES=['Show up at RPE 3','Same rhythm, a little further','The build week','Cut-back and consolidate'];
+const STRENGTH_A=['Calf raise, straight knee (slow lowering)','Calf raise, bent knee','Squat or goblet squat','Reverse lunge or step-up','Glute bridge or single-leg bridge','Single-leg Romanian deadlift','Side plank','Dead bug'];
+const STRENGTH_B=['Single-leg calf raise','Banded lateral walk','Hamstring bridge walkout or slider curl','Plank'];
+const AREAS=['None','Calf (left)','Calf (right)','Thigh (left)','Thigh (right)','Other'];
+
+/* ---------- storage: IndexedDB on this phone, localStorage mirror ---------- */
+const LS_KEY='runlog_v1',DB_NAME='comeback-run-log';
+function normalize(s){
+  if(!s||typeof s!=='object')s={};
+  return {runs:Array.isArray(s.runs)?s.runs.filter(r=>r&&r.id&&r.d&&r.km>0):[],strength:(s.strength&&typeof s.strength==='object')?s.strength:{},updated:+s.updated||0,clearedAt:+s.clearedAt||0,lastBackup:+s.lastBackup||0};
+}
+function idb(){
+  return new Promise((res,rej)=>{
+    if(!('indexedDB' in window))return rej(new Error('no idb'));
+    const r=indexedDB.open(DB_NAME,1);
+    r.onupgradeneeded=()=>r.result.createObjectStore('kv');
+    r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);
+  });
+}
+let dbp=null;
+const db=()=>dbp||(dbp=idb());
+async function idbGet(k){const d=await db();return new Promise((res,rej)=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>res(q.result);q.onerror=()=>rej(q.error);});}
+async function idbSet(k,v){const d=await db();return new Promise((res,rej)=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=()=>res();t.onerror=()=>rej(t.error);});}
+async function loadState(){
+  let a=null,b=null;
+  try{a=await idbGet('state');}catch(e){}
+  try{b=JSON.parse(localStorage.getItem(LS_KEY)||'null');}catch(e){}
+  a=a?normalize(a):null;b=b?normalize(b):null;
+  if(a&&b)return a.updated>=b.updated?a:b;
+  return a||b||normalize(null);
+}
+
+let S=normalize(null);
+let saveTimer=null,saveState='',banner=null,logDate=null,pendingDel=null,pendingClear=false,lastTab='',installEvt=null;
+
+function save(delay){S.updated=Date.now();clearTimeout(saveTimer);saveState='pending';setStatus();saveTimer=setTimeout(doSave,delay||0);}
+async function doSave(){
+  const snap=JSON.parse(JSON.stringify(S));
+  let ok=false;
+  try{await idbSet('state',snap);ok=true;}catch(e){}
+  try{localStorage.setItem(LS_KEY,JSON.stringify(snap));ok=true;}catch(e){}
+  saveState=ok?'saved':'error';setStatus();
+}
+function setStatus(){
+  const el=$('#save');if(!el)return;
+  const m={'':'','pending':'Saving','saved':'Saved on this phone','error':'Could not save. Export a backup now.'};
+  el.textContent=m[saveState]||'';el.style.display=m[saveState]?'':'none';
+}
+
+/* ---------- derived data ---------- */
+const runsOn=d=>S.runs.filter(r=>r.d===d);
+const isRedRun=r=>!!(r.sharp||r.pain>=5);
+/* A run counts after a "cleared" reset if it was logged after it. Older runs without a timestamp use the end of their day. */
+const runTime=r=>r.at||(toD(r.d).getTime()+864e5-1);
+function weekInfo(w){
+  const items=PLAN.filter(p=>Math.floor(dayDiff(PLAN[0].d,p.d)/7)===w);
+  const s=items[0].d,e=items[items.length-1].d;
+  const planned=items.reduce((a,p)=>a+(p.type==='run'?p.km:0),0);
+  const inWeek=S.runs.filter(r=>r.d>=s&&r.d<=e);
+  const actual=inWeek.reduce((a,r)=>a+r.km,0);
+  const core=items.filter(p=>p.type==='run'&&!p.opt).length;
+  /* Core runs are counted per week (distinct run days, capped at the core count), so moving a run by a day still counts. */
+  const coreDone=Math.min(new Set(inWeek.map(r=>r.d)).size,core);
+  return {w,items,s,e,planned,actual,core,coreDone,title:WEEK_TITLES[w]};
+}
+const WEEKS=[0,1,2,3];
+function itemStatus(p){
+  if(p.type==='rest')return null;
+  if(p.type==='strength')return S.strength[p.d]?{c:'ok',t:'Done'}:(p.d<TODAY?{c:'warn',t:'Missed'}:{c:'',t:'Planned'});
+  const rs=runsOn(p.d);
+  if(rs.length)return {c:'ok',t:r1(rs.reduce((a,r)=>a+r.km,0))+' km done'};
+  if(p.d<TODAY)return p.opt?{c:'',t:'Skipped'}:{c:'warn',t:'Not run'};
+  return {c:'',t:p.opt?'Optional':'Planned'};
+}
+function signal(){
+  const live=S.runs.filter(r=>r.d<=TODAY&&runTime(r)>S.clearedAt);
+  /* Red stays on until you confirm someone has assessed you: it does not expire after 7 days. */
+  const red=live.filter(isRedRun).sort((a,b)=>a.d<b.d?1:-1)[0];
+  if(red)return {lvl:'bad',sticky:true,title:'Red: stop and get it checked',text:'Sharp or strong pain was logged on '+fmtShort(red.d)+(red.area&&red.area!=='None'?' ('+red.area.toLowerCase()+')':'')+'. Do not run until a physio or sports doctor has assessed it.'};
+  const cramps=live.filter(r=>r.cramp&&dayDiff(r.d,TODAY)<14);
+  if(cramps.length>=2)return {lvl:'bad',sticky:true,title:'Red: recurring cramp',text:'Cramp logged on '+cramps.length+' runs in the last 14 days. Stop running and get assessed before the next run.'};
+  const rec=S.runs.filter(r=>{const k=dayDiff(r.d,TODAY);return k>=0&&k<7;}).sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:runTime(b)-runTime(a));
+  if(!rec.length)return {lvl:'',title:'No runs in the last 7 days',text:'Log a run to see your recovery signal.'};
+  if(rec.find(r=>r.pain>=3||r.cramp)||rec[0].rpe>=6)return {lvl:'warn',title:'Amber: ease off',text:'Shorten the next run or swap it for a walk. Skip the Friday and Sunday runs, and do not add strength load.'};
+  return {lvl:'ok',title:'Green: run as planned',text:'Pain stayed at 2/10 or below, no cramp, and effort stayed easy.'};
+}
+function gates(){
+  let core=0,coreDone=0;WEEKS.forEach(w=>{const i=weekInfo(w);core+=i.core;coreDone+=i.coreDone;});
+  const late=S.runs.filter(r=>r.d>='2026-12-14'&&r.d<=LAST);
+  const lateBad=late.filter(r=>r.sharp||r.cramp||r.pain>=3).length;
+  const sA=PLAN.filter(p=>p.type==='strength'&&p.kind==='A');
+  const sDone=sA.filter(p=>S.strength[p.d]).length;
+  const avg=(from,to)=>{const xs=S.runs.filter(r=>r.d>=from&&r.d<=to&&r.rpe<=4&&r.min>0&&r.km>0).map(r=>r.min/r.km);return xs.length?xs.reduce((a,b)=>a+b,0)/xs.length:null;};
+  const p1=avg('2026-11-30','2026-12-06'),p4=avg('2026-12-21','2026-12-27');
+  return [
+    {ok:coreDone>=13,t:'Core runs completed',d:coreDone+' of '+core+' done. You need at least 13. Fridays are optional.'},
+    {ok:late.length>0&&lateBad===0,t:'Green for Weeks 3 and 4',d:late.length?(lateBad===0?'No pain above 2/10, no cramp and no sharp pain since 14 Dec.':lateBad+' run'+(lateBad>1?'s':'')+' with pain of 3/10 or more, cramp or sharp pain since 14 Dec.'):'No runs logged yet for 14–27 Dec.'},
+    {ok:sDone>=3,t:'Wednesday strength sessions',d:sDone+' of '+sA.length+' done. You need at least 3.'},
+    {ok:null,t:'Easy pace feels easier at the same RPE',d:(p1&&p4)?'Easy-run average (RPE 4 or less): Week 1 '+fmtPace(p1)+'/km, Week 4 '+fmtPace(p4)+'/km. Your call: is it easier?':'Needs timed runs at RPE 4 or less in Weeks 1 and 4. This one is your own judgement.'}
+  ];
+}
+function summary(){
+  const L=['Running comeback log, as of '+TODAY,''];
+  WEEKS.forEach(w=>{const i=weekInfo(w);L.push('Week '+(w+1)+' ('+fmtShort(i.s)+'–'+fmtShort(i.e)+'): '+r1(i.actual)+' km logged of '+i.planned+' planned; core runs '+i.coreDone+'/'+i.core);});
+  const sig=signal();L.push('','Recovery signal: '+sig.title);
+  if(S.clearedAt)L.push('Marked as assessed/cleared on '+ymd(new Date(S.clearedAt)));
+  L.push('','Runs:');
+  const rs=S.runs.slice().sort((a,b)=>a.d<b.d?-1:a.d>b.d?1:runTime(a)-runTime(b));
+  if(!rs.length)L.push('none logged yet');
+  rs.forEach(r=>L.push(r.d+' | '+r1(r.km)+' km | '+(r.min?fmtDur(r.min)+' ('+fmtPace(r.min/r.km)+'/km)':'no time')+' | RPE '+r.rpe+' | pain '+r.pain+(r.area&&r.area!=='None'?' ('+r.area+')':'')+(r.sharp?' | SHARP/LIMP':'')+(r.cramp?' | CRAMP':'')+' | '+(r.heat||'')+' | '+(r.shoe||'')+(r.note?' | '+r.note:'')));
+  const sd=Object.keys(S.strength).filter(k=>S.strength[k]).sort();
+  L.push('','Strength done: '+(sd.length?sd.join(', '):'none yet'));
+  L.push('','January gate:');
+  gates().forEach(g=>L.push((g.ok===true?'[x] ':g.ok===false?'[ ] ':'[?] ')+g.t+': '+g.d));
+  return L.join('\n');
+}
+
+/* ---------- views ---------- */
+const tabs=['today','log','plan','progress'];
+const tab=()=>{const h=location.hash.replace('#','');return tabs.indexOf(h)>=0?h:'today';};
+const opts=(arr,sel)=>arr.map(v=>'<option value="'+esc(v)+'"'+(String(v)===String(sel)?' selected':'')+'>'+esc(v)+'</option>').join('');
+const standalone=()=>window.matchMedia('(display-mode: standalone)').matches||navigator.standalone===true;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+
+function sessionCard(p){
+  if(p.type==='rest')return '<div class="card"><h2>'+esc(p.label)+'</h2><p class="muted">'+fmt(p.d)+'. Sleep, eat well and keep it gentle.</p></div>';
+  if(p.type==='strength'){
+    const list=(p.kind==='A'?STRENGTH_A:STRENGTH_B).map(x=>'<li>'+esc(x)+'</li>').join('');
+    return '<div class="card"><h2>'+esc(p.label)+'</h2><p class="muted">'+fmt(p.d)+' · about '+esc(p.min)+' min · effort RPE '+esc(p.rpe)+'</p><ul>'+list+'</ul><p class="small muted">Stop each set with 2–3 reps left. Soreness of 3/10 or less, gone within 48 hours.</p><div class="row"><button class="btn" type="button" data-act="strength" data-d="'+p.d+'">'+(S.strength[p.d]?'Done. Tap to undo':'Mark strength done')+'</button></div></div>';
+  }
+  const s=itemStatus(p);
+  return '<div class="card"><div class="wk"><h2>'+esc(p.label)+'</h2><span class="pill '+(s.c||'')+'">'+esc(s.t)+'</span></div><p class="muted" style="margin:0">'+fmt(p.d)+(p.opt?' · optional':'')+'</p>'
+   +'<div class="big" style="margin-top:8px">'+p.km+'<small>km</small></div>'
+   +'<div class="facts"><div class="fact"><span>Pace ceiling</span><b>'+esc(p.pace)+'/km</b></div><div class="fact"><span>Effort</span><b>RPE '+esc(p.rpe)+'</b></div><div class="fact"><span>Shoe</span><b>'+esc(p.shoe)+'</b></div></div>'
+   +(p.note?'<p class="small" style="margin:12px 0 0">'+esc(p.note)+'</p>':'')
+   +'<p class="small muted" style="margin:12px 0 0">Pace is a ceiling, not a target. Add 15–30 s/km in heat, or go by RPE.</p>'
+   +'<div class="row"><button class="btn" type="button" data-act="logfor" data-d="'+p.d+'">Log this run</button></div></div>';
+}
+function sigCard(sig){
+  let out='<div class="sig '+sig.lvl+'"><b>'+esc(sig.title)+'</b><span>'+esc(sig.text)+'</span>';
+  if(sig.sticky)out+='<div class="row"><button class="btn small '+(pendingClear?'danger':'ghost')+'" type="button" data-act="clear">'+(pendingClear?'Tap again to confirm':'I have been assessed and cleared to run')+'</button></div>';
+  return out+'</div>';
+}
+function viewToday(){
+  let out='';
+  const sig=signal();
+  const upcoming=PLAN.filter(p=>p.d>TODAY&&p.type!=='rest');
+  if(TODAY<FIRST_RUN){
+    const n=dayDiff(TODAY,FIRST_RUN);
+    out+='<div class="card"><h2>Recovery phase</h2><p style="margin:0">No running until '+fmt(FIRST_RUN)+' ('+n+' day'+(n===1?'':'s')+'). Sleep, walk if you like and stretch gently. No mileage or pace targets.</p></div>';
+    out+=sessionCard(PLAN.find(p=>p.d===FIRST_RUN));
+  }else if(TODAY>LAST){
+    out+='<div class="card"><h2>Programme complete</h2><p style="margin:0">Check the January gate on the Progress tab, then copy your summary to Claude to plan January.</p></div>';
+  }else{
+    const p=PLAN.find(x=>x.d===TODAY);if(p)out+=sessionCard(p);
+  }
+  out+=sigCard(sig);
+  if(S.runs.length&&Date.now()-S.lastBackup>7*864e5){
+    out+='<div class="banner warn"><b>Back up your log.</b> '+(S.lastBackup?'Last backup '+fmtShort(ymd(new Date(S.lastBackup)))+'.':'No backup yet.')+' Your runs live only on this phone. <a href="#progress">Export on Progress</a>.</div>';
+  }
+  if(upcoming.length){
+    out+='<div class="card"><h3>Coming up</h3><ul class="list">'+upcoming.slice(0,3).map(p=>'<li><span class="d">'+fmt(p.d)+'</span><span>'+esc(p.label)+(p.type==='run'?' · '+p.km+' km':'')+'</span><span class="pill">'+(p.type==='run'?'RPE '+esc(p.rpe):esc(p.min)+' min')+'</span></li>').join('')+'</ul></div>';
+  }
+  out+='<div class="card"><h3>Low on energy?</h3><p class="small" style="margin:0">Use the 10-minute rule: put your shoes on and run for 10 minutes. If you still dislike it, walk home. It still counts as showing up. Never make up a missed run.</p></div>';
+  return out;
+}
+function viewLog(){
+  const d=logDate||TODAY;const pl=PLAN.find(p=>p.d===d&&p.type==='run');
+  const rs=S.runs.slice().sort((a,b)=>a.d<b.d?1:a.d>b.d?-1:runTime(b)-runTime(a));
+  let out='<div class="card"><h2>Log a run</h2><form id="runform" autocomplete="off">'
+   +'<label>Date<input id="f-date" type="date" value="'+d+'" max="'+TODAY+'"></label>'
+   +'<label>Distance (km)<input id="f-km" type="number" inputmode="decimal" step="0.01" min="0" placeholder="'+(pl?pl.km:'3.0')+'"></label>'
+   +'<label>Time<input id="f-time" type="text" inputmode="numeric" placeholder="mm:ss, e.g. 21:30"><span class="hint">Pace: <b id="f-pace">–</b> min/km</span></label>'
+   +'<label>RPE (1–10)<select id="f-rpe">'+opts([1,2,3,4,5,6,7,8,9,10],3)+'</select><span class="hint">Easy runs are 3–4.</span></label>'
+   +'<label>Pain (0–10)<select id="f-pain">'+opts([0,1,2,3,4,5,6,7,8,9,10],0)+'</select><span class="hint">Worst pain during or after.</span></label>'
+   +'<label>Where<select id="f-area">'+opts(AREAS,'None')+'</select></label>'
+   +'<label>Shoe<select id="f-shoe">'+opts([SH_S,SH_V,'Other'],pl?pl.shoe:SH_S)+'</select></label>'
+   +'<label>Weather<select id="f-heat">'+opts(['Cool','Warm','Hot and humid'],'Warm')+'</select></label>'
+   +'<label class="check full"><input id="f-cramp" type="checkbox"> Cramp during the run</label>'
+   +'<label class="check full"><input id="f-sharp" type="checkbox"> Sharp pain, a limp or a changed stride</label>'
+   +'<label class="full">Note<input id="f-note" type="text" maxlength="300" placeholder="Sleep, work, how your legs felt"></label>'
+   +'<div class="full"><div id="f-err" class="err" role="alert"></div><button class="btn" type="button" data-act="saverun">Save run</button></div>'
+   +'</form></div>';
+  out+='<div class="card"><h3>Your runs</h3>';
+  if(!rs.length)out+='<p class="muted small" style="margin:0">Nothing logged yet. Your first planned run is '+fmt(FIRST_RUN)+'.</p>';
+  else out+='<ul class="list">'+rs.map(r=>{
+    const pc=isRedRun(r)?'bad':(r.pain>=3||r.cramp)?'warn':'ok';
+    return '<li><span class="d">'+fmt(r.d)+'</span><span><b>'+r1(r.km)+' km</b>'+(r.min?' · '+fmtDur(r.min)+' · '+fmtPace(r.min/r.km)+'/km':'')+'<br><span class="small muted">RPE '+r.rpe+' · '+esc(r.heat||'')+' · '+esc(r.shoe||'')+(r.note?' · '+esc(r.note):'')+'</span></span><span><span class="pill '+pc+'">Pain '+r.pain+(r.sharp?' sharp':'')+(r.cramp?' cramp':'')+'</span><br><button class="btn small ghost'+(pendingDel===r.id?' danger':'')+'" type="button" data-act="del" data-id="'+esc(r.id)+'" style="margin-top:6px">'+(pendingDel===r.id?'Tap again':'Delete')+'</button></span></li>';
+  }).join('')+'</ul>';
+  return out+'</div>';
+}
+function viewPlan(){
+  return WEEKS.map(w=>{
+    const i=weekInfo(w);
+    return '<div class="card"><div class="wk"><b>Week '+(w+1)+' · '+esc(i.title)+'</b><span class="small muted">'+fmtShort(i.s)+'–'+fmtShort(i.e)+' · '+r1(i.actual)+' / '+i.planned+' km</span></div><ul class="list" style="margin-top:8px">'
+    +i.items.map(p=>{
+      const s=itemStatus(p);
+      const what=p.type==='run'?esc(p.label)+' · <b>'+p.km+' km</b><br><span class="small muted">'+esc(p.pace)+'/km · RPE '+esc(p.rpe)+' · '+esc(p.shoe)+(p.note?' · '+esc(p.note):'')+'</span>'
+        :p.type==='strength'?esc(p.label)+' · '+esc(p.min)+' min':esc(p.label);
+      const right=p.type==='strength'?'<button class="btn small '+(S.strength[p.d]?'':'ghost')+'" type="button" data-act="strength" data-d="'+p.d+'">'+(S.strength[p.d]?'Done':'Mark done')+'</button>'
+        :p.type==='run'?'<span class="pill '+s.c+'">'+esc(s.t)+'</span>':'';
+      return '<li class="'+(p.type==='rest'?'rest':'')+'"><span class="d">'+fmt(p.d)+'</span><span>'+what+'</span><span class="st">'+right+'</span></li>';
+    }).join('')+'</ul></div>';
+  }).join('');
+}
+function viewProgress(){
+  const maxP=Math.max.apply(null,WEEKS.map(w=>weekInfo(w).planned));
+  let out='<div class="card"><h2>Weekly distance</h2><div class="stack">'+WEEKS.map(w=>{
+    const i=weekInfo(w);const f=i.planned?Math.min(i.actual/i.planned,1)*100:0;const over=i.actual>i.planned*1.1;
+    return '<div><div class="wk"><span>Week '+(w+1)+'</span><span class="small muted">'+r1(i.actual)+' of '+i.planned+' km'+(over?' · over plan':'')+' · core runs '+i.coreDone+'/'+i.core+'</span></div><div class="bar" style="width:'+(i.planned/maxP*100)+'%" role="img" aria-label="Week '+(w+1)+': '+r1(i.actual)+' of '+i.planned+' kilometres"><i class="'+(over?'over':'')+'" style="width:'+f+'%"></i></div></div>';
+  }).join('')+'</div><p class="small muted" style="margin:12px 0 0">Bar length shows each week\'s planned km. The fill is what you have logged.</p></div>';
+  const g=gates();
+  out+='<div class="card"><h2>January gate</h2><p class="small muted" style="margin-top:0">Move on to a light quality session only when all of these are met. If not, repeat Week 3 or 4. That is not failing.</p>'
+   +g.map(x=>'<div class="gate"><span class="mark '+(x.ok===true?'ok':'')+'">'+(x.ok===true?'✓':x.ok===false?'':'?')+'</span><div><b>'+esc(x.t)+'</b><br><span class="small muted">'+esc(x.d)+'</span></div></div>').join('')+'</div>';
+  out+='<div class="card"><h2>Summary for Claude</h2><p class="small muted" style="margin-top:0">Copy this into your chat and I will adjust the next week from it.</p><textarea id="sumtext" class="out" readonly>'+esc(summary())+'</textarea><div class="row"><button class="btn" type="button" data-act="copy">Copy summary</button><span id="copymsg" class="small muted" role="status"></span></div></div>';
+  out+='<div class="card"><h2>Backup</h2><p class="small muted" style="margin-top:0">Your log is stored only on this phone. Export a backup file every week or so, and before changing phones or clearing browser data. Importing merges a backup into what is here.</p>'
+   +'<p class="small" style="margin:0">Last backup: <b>'+(S.lastBackup?fmt(ymd(new Date(S.lastBackup))):'never')+'</b> · '+S.runs.length+' run'+(S.runs.length===1?'':'s')+' stored</p>'
+   +'<div class="row"><button class="btn" type="button" data-act="export">Export backup</button><button class="btn ghost" type="button" data-act="import">Import backup</button><input id="importfile" type="file" accept=".json,application/json"></div><div id="bkmsg" class="small" role="status" style="margin-top:8px"></div></div>';
+  if(!standalone()){
+    out+='<div class="card"><h2>Install on your phone</h2>'
+     +(installEvt?'<p class="small muted" style="margin-top:0">Add the tracker to your home screen. It opens full screen and works offline.</p><div class="row"><button class="btn" type="button" data-act="install">Install app</button></div>'
+       :isIOS()?'<p class="small" style="margin:0">In Safari, tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>'
+       :'<p class="small" style="margin:0">In Chrome, open the <b>⋮</b> menu and tap <b>Add to Home screen</b> or <b>Install app</b>.</p>')
+     +'</div>';
+  }
+  out+='<p class="small muted">This tracker is a coaching aid, not medical advice. See a physio or sports doctor for sharp or recurring pain.</p>';
+  return out;
+}
+function shell(t,body){
+  let phase;
+  if(TODAY<FIRST_RUN)phase='Recovery break until '+fmt('2026-11-30')+'. First run '+fmtShort(FIRST_RUN)+'.';
+  else if(TODAY>LAST)phase='Four-week programme finished.';
+  else{const w=Math.floor(dayDiff(PLAN[0].d,TODAY)/7);phase='Week '+(w+1)+' of 4 · '+WEEK_TITLES[w];}
+  const lab={today:'Today',log:'Log run',plan:'Plan',progress:'Progress'};
+  return '<div class="wrap"><header><div><h1>Comeback Run Log</h1><p class="sub">'+esc(phase)+'</p></div><span id="save" class="save" role="status"></span></header>'
+   +'<nav aria-label="Sections">'+tabs.map(x=>'<a href="#'+x+'"'+(x===t?' aria-current="page"':'')+'>'+lab[x]+'</a>').join('')+'</nav>'
+   +(banner?'<div class="banner '+esc(banner.lvl||'')+'" role="status">'+esc(banner.msg)+'</div>':'')
+   +body+'</div>';
+}
+function render(){
+  TODAY=ymd(new Date());
+  const t=tab();lastTab=t;
+  const v={today:viewToday,log:viewLog,plan:viewPlan,progress:viewProgress}[t]();
+  $('#app').innerHTML=shell(t,v);
+  setStatus();
+}
+
+/* ---------- backup ---------- */
+function exportBackup(){
+  S.lastBackup=Date.now();
+  const data=JSON.stringify({app:'comeback-run-log',version:1,exported:new Date().toISOString(),state:S},null,1);
+  const blob=new Blob([data],{type:'application/json'});
+  const name='comeback-run-log-'+ymd(new Date())+'.json';
+  const done=()=>{save(0);render();const m=$('#bkmsg');if(m)m.textContent='Backup saved as '+name+'.';};
+  try{
+    const file=new File([blob],name,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})&&isIOS()){
+      navigator.share({files:[file],title:name}).then(done).catch(()=>{});return;
+    }
+  }catch(e){}
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();
+  setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
+  done();
+}
+function importBackup(file){
+  const msg=t=>{const m=$('#bkmsg');if(m)m.textContent=t;};
+  const rd=new FileReader();
+  rd.onload=()=>{
+    let raw;try{raw=JSON.parse(rd.result);}catch(e){msg('That file is not a backup from this app.');return;}
+    const inc=normalize(raw&&raw.state?raw.state:raw);
+    if(!inc.runs.length&&!Object.keys(inc.strength).length){msg('That backup has no runs or strength sessions in it.');return;}
+    const have=new Set(S.runs.map(r=>r.id));let added=0;
+    inc.runs.forEach(r=>{if(!have.has(r.id)){S.runs.push(r);added++;}});
+    Object.keys(inc.strength).forEach(k=>{if(inc.strength[k])S.strength[k]=true;});
+    S.clearedAt=Math.max(S.clearedAt,inc.clearedAt);S.lastBackup=Math.max(S.lastBackup,inc.lastBackup);
+    save(0);render();msg('Imported '+added+' new run'+(added===1?'':'s')+'. Runs already here were kept.');
+  };
+  rd.onerror=()=>msg('Could not read that file.');
+  rd.readAsText(file);
+}
+
+/* ---------- actions ---------- */
+function saveRun(){
+  const g=id=>document.getElementById(id);const err=g('f-err');
+  const d=g('f-date').value,km=parseFloat(g('f-km').value),raw=g('f-time').value,min=parseTime(raw);
+  if(!d){err.textContent='Pick a date.';return;}
+  if(d>ymd(new Date())){err.textContent='That date is in the future.';return;}
+  if(!(km>0&&km<60)){err.textContent='Enter the distance in km, for example 3.2.';return;}
+  if(raw.trim()&&!(min>0)){err.textContent='Enter the time as mm:ss, for example 21:30.';return;}
+  const now=Date.now();
+  S.runs.push({id:now.toString(36)+Math.random().toString(36).slice(2,6),at:now,d:d,km:Math.round(km*100)/100,min:min,rpe:+g('f-rpe').value,pain:+g('f-pain').value,area:g('f-area').value,sharp:g('f-sharp').checked,cramp:g('f-cramp').checked,shoe:g('f-shoe').value,heat:g('f-heat').value,note:g('f-note').value.trim().slice(0,300)});
+  TODAY=ymd(new Date());
+  const sig=signal();
+  banner={lvl:sig.lvl==='bad'?'bad':sig.lvl==='warn'?'warn':'ok',msg:'Run saved. '+sig.title+'. '+sig.text};
+  logDate=null;
+  location.hash='today';lastTab='today';render();window.scrollTo(0,0);
+  save(0);
+}
+document.addEventListener('click',function(e){
+  const b=e.target.closest&&e.target.closest('[data-act]');if(!b)return;
+  const a=b.getAttribute('data-act');
+  if(a==='saverun')saveRun();
+  else if(a==='logfor'){logDate=b.getAttribute('data-d');location.hash='log';lastTab='log';render();window.scrollTo(0,0);}
+  else if(a==='strength'){const d=b.getAttribute('data-d');S.strength[d]=!S.strength[d];if(!S.strength[d])delete S.strength[d];render();save(300);}
+  else if(a==='del'){
+    const id=b.getAttribute('data-id');
+    if(pendingDel===id){S.runs=S.runs.filter(r=>r.id!==id);pendingDel=null;render();save(0);}
+    else{pendingDel=id;render();}
+  }else if(a==='clear'){
+    if(pendingClear){S.clearedAt=Date.now();pendingClear=false;banner={lvl:'ok',msg:'Marked as assessed. Restart gently and follow what your physio or doctor advised.'};render();save(0);}
+    else{pendingClear=true;render();}
+  }else if(a==='copy'){
+    const ta=document.getElementById('sumtext'),msg=document.getElementById('copymsg');
+    const fallback=()=>{ta.focus();ta.select();if(msg)msg.textContent='Press and hold, then tap Copy.';};
+    try{navigator.clipboard.writeText(ta.value).then(()=>{if(msg)msg.textContent='Copied.';}).catch(fallback);}catch(err){fallback();}
+  }else if(a==='export')exportBackup();
+  else if(a==='import'){const f=document.getElementById('importfile');if(f){f.value='';f.click();}}
+  else if(a==='install'&&installEvt){installEvt.prompt();installEvt.userChoice.finally(()=>{installEvt=null;render();});}
+  else if(a==='update'){const w=window.__swWaiting;if(w)w.postMessage('SKIP_WAITING');else location.reload();}
+});
+document.addEventListener('change',function(e){
+  if(e.target.id==='importfile'&&e.target.files&&e.target.files[0])importBackup(e.target.files[0]);
+});
+document.addEventListener('input',function(e){
+  if(e.target.id==='f-km'||e.target.id==='f-time'){
+    const km=parseFloat(document.getElementById('f-km').value),min=parseTime(document.getElementById('f-time').value);
+    const el=document.getElementById('f-pace');if(el)el.textContent=(km>0&&min>0)?fmtPace(min/km):'–';
+  }
+});
+window.addEventListener('hashchange',function(){if(tab()!==lastTab){banner=null;pendingDel=null;pendingClear=false;}render();});
+/* Re-render when the app comes back to the foreground, so the date and Today card are current. */
+document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible'&&ymd(new Date())!==TODAY&&tab()!=='log')render();});
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();installEvt=e;if(tab()==='progress')render();});
+window.addEventListener('appinstalled',function(){installEvt=null;});
+
+/* ---------- offline + updates ---------- */
+if('serviceWorker' in navigator&&location.protocol!=='file:'){
+  window.addEventListener('load',function(){
+    navigator.serviceWorker.register('sw.js').then(function(reg){
+      const show=w=>{window.__swWaiting=w;const u=$('#update');if(u)u.hidden=false;};
+      if(reg.waiting&&navigator.serviceWorker.controller)show(reg.waiting);
+      reg.addEventListener('updatefound',function(){
+        const nw=reg.installing;if(!nw)return;
+        nw.addEventListener('statechange',function(){if(nw.state==='installed'&&navigator.serviceWorker.controller)show(nw);});
+      });
+      document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')reg.update().catch(()=>{});});
+    }).catch(function(){});
+    let reloading=false;
+    navigator.serviceWorker.addEventListener('controllerchange',function(){if(reloading)return;reloading=true;location.reload();});
+  });
+}
+if(navigator.storage&&navigator.storage.persist){navigator.storage.persist().catch(()=>{});}
+
+loadState().then(s=>{S=s;render();}).catch(()=>render());
+})();
+</script>
+</body>
+</html>
