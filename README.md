@@ -9,14 +9,14 @@ An installable, offline web app version of the tracker. Your runs are stored **o
 | `index.html` | The whole app (plan, views, storage, backup) |
 | `manifest.webmanifest` | Name, colours, icons, so the phone can install it |
 | `sw.js` | Service worker: caches the app so it opens offline, and handles updates |
-| `icons/` | App icons (Android, maskable, iPhone, favicon) |
+| `*.png` | App icons (Android, maskable, iPhone, favicon), kept at the top level next to `index.html` |
 
 ## 1. Host it once (HTTPS required)
 A PWA has to be served over HTTPS. Pick one option:
 
 **GitHub Pages (free, permanent)**
 1. Create a GitHub repo, e.g. `run-log`. A free account needs it to be public. Only the app code goes in it, never your runs.
-2. Upload every file in this folder, keeping `icons/` as a folder.
+2. Upload every file in this folder. Everything sits at the top level, with no subfolders.
 3. Repo **Settings → Pages → Deploy from a branch → `main` / root**.
 4. After about a minute it is live at `https://<your-username>.github.io/run-log/`.
 

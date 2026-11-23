@@ -1,18 +1,18 @@
 /* Comeback Run Log service worker.
    To ship an update: change any app file, then bump VERSION below and upload everything.
    Open copies of the app then show "A new version is ready" with a Reload button. */
-const VERSION = 'v1';
+const VERSION = 'v2';
 const SHELL_CACHE = 'crl-shell-' + VERSION;
 const FONT_CACHE = 'crl-fonts';
 const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
-  './icons/icon-192.png',
-  './icons/icon-512.png',
-  './icons/maskable-512.png',
-  './icons/apple-touch-icon.png',
-  './icons/favicon-32.png'
+  './icon-192.png',
+  './icon-512.png',
+  './maskable-512.png',
+  './apple-touch-icon.png',
+  './favicon-32.png'
 ];
 
 self.addEventListener('install', (e) => {
